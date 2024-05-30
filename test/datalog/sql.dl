@@ -1,0 +1,94 @@
+scope.tableColumn{defnLoc: DL, name: N, table: T, type: TY} :-
+  ast.createTableStmt{id: CreateTableID} &
+  ast.tableName{parentID: CreateTableID, text: T} &
+  ast.colSpec{id: ColSpecID, parentID: CreateTableID} &
+  ast.type{parentID: ColSpecID, text: TY} &
+  ast.columnName{parentID: ColSpecID, span: DL, text: N}.
+
+scope.Defn{scopeID: I, span: S, name: N, kind: K, type: "any"} :-
+  scope.tableDefn{scopeID: I, span: S, name: N, kind: K} |
+  scope.columnFromSelectTable{scopeID: I, span: S, name: N, kind: K} |
+  scope.columnFromTableRef{scopeID: I, span: S, name: N, kind: K}.
+scope.tableDefn{scopeID: "global", span: S, name: N, kind: "table"} :-
+  ast.createTableStmt{id: CreateTableID} &
+  ast.tableName{parentID: CreateTableID, text: N, span: S}.
+scope.columnFromSelectTable{scopeID: SelectID, span: S, name: N, kind: "column"} :-
+  ast.selectStmt{id: SelectID} &
+  ast.tableName{parentID: SelectID, text: T} &
+  scope.tableColumn{table: T, defnLoc: S, name: N}.
+scope.columnFromTableRef{scopeID: RefID, span: S, name: N, kind: "column"} :-
+  ast.refClause{id: RefID} &
+  ast.tableName{parentID: RefID, text: T} &
+  scope.tableColumn{table: T, defnLoc: S, name: N}.
+
+scope.Var{scopeID: I, name: N, span: S, kind: K} :-
+  scope.tableUsage{scopeID: I, name: N, span: S, kind: K} |
+  scope.columnUsage{scopeID: I, name: N, span: S, kind: K} |
+  scope.tableRef{scopeID: I, name: N, span: S, kind: K} |
+  scope.columnRef{scopeID: I, name: N, span: S, kind: K}.
+scope.tableUsage{scopeID: "global", name: N, span: S, kind: "table"} :-
+  ast.selectStmt{id: SelectID} &
+  ast.tableName{parentID: SelectID, id: TableNameID} &
+  ast.ident{id: TableNameID, span: S, text: N}.
+scope.columnUsage{scopeID: SelectID, name: N, span: S, kind: "column"} :-
+  ast.selectStmt{id: SelectID} &
+  ast.selection{parentID: SelectID, id: SelectionID} &
+  ast.columnName{parentID: SelectionID, id: ColNameID} &
+  ast.ident{parentID: ColNameID, span: S, text: N}.
+scope.tableRef{scopeID: "global", name: N, span: S, kind: "table"} :-
+  ast.refClause{id: C} &
+  ast.tableName{parentID: C, id: T} &
+  ast.ident{parentID: T, text: N, span: S}.
+scope.columnRef{scopeID: C, name: N, span: S, kind: "column"} :-
+  ast.refClause{id: C} &
+  ast.columnName{parentID: C, id: CN} &
+  ast.ident{parentID: CN, text: N, span: S}.
+
+scope.Placeholder{span: S, scopeID: I, kind: K} :-
+  scope.placeholderColumn{span: S, scopeID: I, kind: K} |
+  scope.placeholderSelectTable{span: S, scopeID: I, kind: K}.
+scope.placeholderColumn{span: S, scopeID: SelectID, kind: "column"} :-
+  ast.selectStmt{id: SelectID} &
+  ast.selection{parentID: SelectID, id: SelectionID} &
+  ast.columnName{parentID: SelectionID, id: ColNameID} &
+  ast.placeholder{parentID: ColNameID, span: S}.
+scope.placeholderSelectTable{span: S, scopeID: "global", kind: "table"} :-
+  ast.selectStmt{id: SelectID} &
+  ast.tableName{parentID: SelectID, id: TableNameID} &
+  ast.placeholder{parentID: TableNameID, span: S}.
+
+scope.foreignKey{fromTable: FT, fromCol: FC, toTable: TT, toCol: TC} :-
+  ast.createTableStmt{id: CreateTable} &
+  ast.tableName{parentID: CreateTable, text: FT} &
+  ast.colSpec{id: ColSpec, parentID: CreateTable} &
+  ast.columnName{parentID: ColSpec, text: FC} &
+  ast.refClause{id: TR, parentID: ColSpec} &
+  ast.tableName{parentID: TR, text: TT} &
+  ast.columnName{parentID: TR, text: TC}.
+
+scope.table{name: N} :-
+  ast.createTableStmt{id: CreateTable} &
+  ast.tableName{parentID: CreateTable, text: N}.
+
+tc.Problem{span: S, desc: D} :-
+  tc.undefVarError{span: S, desc: D}.
+
+hl.mapping{rule: "intLit", type: "number"}.
+hl.mapping{rule: "stringLit", type: "string"}.
+hl.mapping{rule: "bool", type: "number"}.
+hl.mapping{rule: "ident", type: "ident"}.
+hl.mapping{rule: "type", type: "ident"}.
+
+hl.mapping{rule: "createKW", type: "keyword"}.
+hl.mapping{rule: "tableKW", type: "keyword"}.
+hl.mapping{rule: "selectKW", type: "keyword"}.
+hl.mapping{rule: "fromKW", type: "keyword"}.
+hl.mapping{rule: "refKW", type: "keyword"}.
+
+internal.visualization{
+  name: "Foreign Key Graph",
+  spec: graphviz{
+    nodes: scope.table{name: ID},
+    edges: scope.foreignKey{fromTable: From, toTable: To, fromCol: Label}
+  }
+}.

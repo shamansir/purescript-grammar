@@ -1,0 +1,34 @@
+main :- repSep(statement, ws).
+
+statement :- [(selectStmt | createTableStmt), ";"].
+
+selectStmt :- [(manyKW | oneKW), ws, tableName, ws, selection].
+selection :- ["{", ws, repSep(selectionElement, commaWS), ws, "}"].
+selectionElement :- [columnName, (subSelection | "")].
+subSelection :- [":", ws, selectStmt].
+
+createTableStmt :- [createKW, ws, tableKW, ws, tableName, ws, "(", ws, repSep(colSpec, commaWS), ws, ")"].
+
+colSpec :- [columnName, ws, type, ws, (referencesClause | "")].
+
+type :- ("INT" | "TEXT").
+referencesClause :- [referencesKW, ws, tableName].
+
+columnName :- (ident | placeholder).
+tableName :- (ident | placeholder).
+
+createKW :- "CREATE".
+tableKW :- "TABLE".
+manyKW :- "MANY".
+oneKW :- "ONE".
+referencesKW :- "REFERENCES".
+
+ident :- [alpha, repSep((alphaNum | "."), "")].
+string :- ["\"", repSep(stringChar, ""), "\""].
+stringChar :- (^'"' | ['\\', '"']).
+alpha :- ([a-z] | [A-Z] | "_").
+num :- [0-9].
+alphaNum :- (alpha | num).
+ws :- repSep((" "|"\n"), "").
+commaWS :- [",", ws].
+placeholder :- "???".

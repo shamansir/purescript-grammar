@@ -3,6 +3,7 @@ module Grammar where
 import Prelude
 
 import Data.Map (Map)
+import Data.Map (empty) as Map
 
 
 type RuleName = String
@@ -35,6 +36,10 @@ data AST a
 
 data Failure = Failure Position
 
+
+
+empty :: Grammar
+empty = Grammar Map.empty
 
 
 parse :: forall a. String -> (Rule -> a) -> Grammar -> AST a
