@@ -55,6 +55,10 @@ empty :: Grammar
 empty = Grammar Placeholder Map.empty
 
 
+from :: Rule -> Map RuleName Rule -> Grammar
+from = Grammar
+
+
 parse :: forall a. Grammar -> (Rule -> a) -> String -> AST a
 parse _ _ _ = Nil
 

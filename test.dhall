@@ -14,5 +14,6 @@ in conf // {
     , "node-buffer"
     , "node-fs"
     , "debug"
+    , "datetime"
     ]
 }
