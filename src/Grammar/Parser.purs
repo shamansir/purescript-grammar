@@ -20,7 +20,6 @@ import Parsing.Combinators as P
 import Parsing.Combinators.Array as PA
 import Parsing.String as P
 import Parsing.String.Basic as P
-import Parsing.String.Basic as P
 
 
 type P a = Parser String a
@@ -82,24 +81,10 @@ seq :: P Grammar.Rule
 seq = defer \_ ->
     Grammar.Sequence <$>
     NEL.toUnfoldable <$>
-    {-
-    do
-        _ <- P.char '['
-        ws
-        rules <-
-            P.sepBy1 rule $ do
-                ws
-                _ <- P.char ','
-                ws
-        ws
-        _ <- P.char ']'
-        pure rules
-
-    -}
     P.between
-        (P.char '[' <* ws)
-        (ws <* P.char ']')
-        (P.sepBy1 rule (ws *> P.char ',' <* ws))
+        (P.char '[')
+        (P.char ']')
+        (P.sepBy1 (ws *> rule <* ws) $ P.char ',')
 
 
 eol :: P Unit
