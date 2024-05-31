@@ -18,6 +18,7 @@ import Grammar as Grammar
 
 import Parsing (Parser)
 import Parsing (fail) as P
+import Parsing.Combinators ((<?>))
 import Parsing.Combinators as P
 import Parsing.Combinators.Array as PA
 import Parsing.String as P
@@ -30,8 +31,8 @@ type P a = Parser String a
 parser :: P Grammar
 parser =
     map
-        (Array.catMaybes >>> Map.fromFoldable >>> makeGrammar)
-        <$> PA.many
+        (NEA.toArray >>> Array.catMaybes >>> Map.fromFoldable >>> makeGrammar)
+        <$> PA.many1
             $ P.choice [ Just <$> ruleLine, Nothing <$ emptyLine, Nothing <$ commentLine ]
     where
         makeGrammar map =
@@ -67,17 +68,18 @@ ruleLine = do --defer \_ -> do
 rule :: P Grammar.Rule
 rule = defer \_ ->
     P.choice
-        [ P.try anyChar
-        , P.try seq
-        , P.try choice
-        , P.try text
-        , P.try charRange
-        , P.try notChar
-        , P.try char
-        , P.try ref
-        , P.try repSep
-        , P.try repSepAlt
-        , P.try placeholder
+        -- FIXME: using P.try in choice is considered bad practice
+        [ P.try anyChar <?> "any char rule"
+        , P.try seq <?> "sequence rule"
+        , P.try choice <?> "choice rule"
+        , P.try text <?> "text rule"
+        , P.try charRange <?> "char range rule"
+        , P.try notChar <?> "not-char rule"
+        , P.try char <?> "char rule"
+        , P.try repSep <?> "rep-sep rule"
+        , P.try repSepAlt <?> "rep-sep-alt rule"
+        , P.try ref <?> "ref rule"
+        , P.try placeholder <?> "placeholder rule"
         ]
         -- [ anyChar
         -- , seq
@@ -120,7 +122,7 @@ choice = defer \_ ->
 
 ref :: P Grammar.Rule
 ref = defer \_ -> do
-    mbCapture <- P.optionMaybe $ do
+    mbCapture <- P.optionMaybe $ P.try $ do
         captureName <- _ident
         _ <- P.char ':'
         pure captureName
@@ -208,7 +210,8 @@ repSepAlt = defer \_ ->
 _ident :: P String
 _ident =
     String.fromCharArray
-    <$> PA.many P.alphaNum
+    <$> NEA.toArray
+    <$> PA.many1 P.alphaNum
 
 
 _char :: P Char

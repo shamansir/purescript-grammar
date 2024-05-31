@@ -33,10 +33,16 @@ main = launchAff_ $ runSpec [consoleReporter] do
         g "main :- [a-z]." "main :- ['a'-'z'].\n"
       it "should parse simple grammar (repsep)" $
         g "main :- repSep(., '?')." "main :- repSep(.,'?').\n"
-      it "should parse simple grammar (choice)" $
-        g "main :- (.|a|b|)." "---"
+      it "should parse simple grammar (sequence 1)" $
+        g "main :- [.,a,b]." "main :- [.,a,b].\n"
+      it "should parse simple grammar (sequence 2)" $
+        g "main :- [.,'a','b']." "main :- [.,'a','b'].\n"
+      it "should parse simple grammar (choice 1)" $
+        g "main :- (.|a|b)." "main :- (.|a|b).\n"
+      it "should parse simple grammar (choice 2)" $
+        g "main :- (.|'a'|'b')." "main :- (.|'a'|'b').\n"
       it "should parse simple grammar (rule)" $
-        g "main :- rule." "---"
+        g "main :- rule." "main :- rule.\n"
       it "should parse grammar with comments" $
         g "# comment\nmain :- .\n" "---"
       it "should parse weird grammar with spaces" $
@@ -50,7 +56,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "should parse simple grammar w/o main rule, v. 2" $
         g "some :- 'x'." "main :- ???.\nsome :- 'x'."
       it "should parse simple grammar with several rules" $
-        g "main :- some.\nsome :- .." "---"
+        g "main :- some.\nsome :- .." "main :- some.\nsome :- .."
 
 
 
