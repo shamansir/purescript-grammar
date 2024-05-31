@@ -66,8 +66,8 @@ parse _ _ _ = Nil
 instance Show CharRule where
     show = case _ of
         Range chA chB -> "[" <> show chA <> "-" <> show chB <> "]"
-        Not char -> "^'" <> show char <> "'"
-        Single char -> "'" <> show char <> "'"
+        Not char -> "^" <> show char -- "^'" <> show char <> "'"
+        Single char -> show char -- "'" <> show char <> "'"
         Any -> "."
 
 
@@ -92,7 +92,7 @@ instance Show Grammar where
         ruleLine "main" main <> "\n" <> String.joinWith "\n" (Map.toUnfoldable others <#> Tuple.uncurry ruleLine)
         where
             ruleLine name rule =
-                name <> " :- " <> show rule
+                name <> " :- " <> show rule <> "."
 
 
 

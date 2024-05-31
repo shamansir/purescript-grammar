@@ -15,5 +15,7 @@ in conf // {
     , "node-fs"
     , "debug"
     , "datetime"
+    , "exceptions"
+    , "transformers"
     ]
 }

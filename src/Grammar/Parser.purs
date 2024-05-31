@@ -2,7 +2,7 @@ module Grammar.Parser where
 
 import Prelude
 
-import Data.Tuple (uncurry) as Tuple
+import Data.Tuple (uncurry, fst) as Tuple
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.String.CodeUnits as String
 import Data.Array as Array
@@ -17,6 +17,7 @@ import Grammar (Grammar)
 import Grammar as Grammar
 
 import Parsing (Parser)
+import Parsing (fail) as P
 import Parsing.Combinators as P
 import Parsing.Combinators.Array as PA
 import Parsing.String as P
@@ -66,18 +67,30 @@ ruleLine = do --defer \_ -> do
 rule :: P Grammar.Rule
 rule = defer \_ ->
     P.choice
-        [ anyChar
-        , seq
-        , choice
-        , text
-        , charRange
-        , notChar
-        , char
-        , ref
-        , repSep
-        , repSepAlt
-        , placeholder
+        [ P.try anyChar
+        , P.try seq
+        , P.try choice
+        , P.try text
+        , P.try charRange
+        , P.try notChar
+        , P.try char
+        , P.try ref
+        , P.try repSep
+        , P.try repSepAlt
+        , P.try placeholder
         ]
+        -- [ anyChar
+        -- , seq
+        -- , choice
+        -- , text
+        -- , charRange
+        -- , notChar
+        -- , char
+        -- , ref
+        -- , repSep
+        -- , repSepAlt
+        -- , placeholder
+        -- ]
 
 
 anyChar :: P Grammar.Rule
@@ -119,10 +132,11 @@ text :: P Grammar.Rule
 text = defer \_ ->
     Grammar.Text <$>
     String.fromCharArray <$>
+    NEA.toUnfoldable <$>
     P.between
         (P.char '"')
         (P.char '"')
-        (PA.many P.anyChar)
+        (PA.many1 $ _notBut (P.char '"') P.anyChar)
 
 
 char :: P Grammar.Rule
@@ -181,8 +195,8 @@ repSep = defer \_ ->
 repSepAlt :: P Grammar.Rule
 repSepAlt = defer \_ ->
     Tuple.uncurry Grammar.RepSep <$> do
+        void $ P.string "+" -- eliminates left recursion
         rep <- rule
-        void $ P.char '+'
         ws
         void $ P.string "//"
         ws
@@ -203,6 +217,14 @@ _char =
         (P.char '\'')
         (P.char '\'')
         (P.anyChar)
+
+
+_notBut :: forall a x. Show x => P x -> P a -> P a
+_notBut exclude pass = do
+    mbExclude <- P.optionMaybe $ P.try exclude
+    case mbExclude of
+        Just x -> P.fail $ "found " <> show x
+        Nothing -> pass
 
 
 ws :: P Unit
