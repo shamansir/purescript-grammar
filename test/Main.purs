@@ -29,10 +29,18 @@ main = launchAff_ $ runSpec [consoleReporter] do
         g "main :- \"foobar\".\n" "main :- \"foobar\".\n"
       it "should parse simple grammar (char)" $
         g "main :- 'x'.\n" "main :- 'x'.\n"
+      it "should parse simple grammar (not char)" $
+        g "main :- ^'x'.\n" "main :- ^'x'.\n"
       it "should parse simple grammar (range)" $
         g "main :- [a-z]." "main :- ['a'-'z'].\n"
+      it "should parse simple grammar (range 2)" $
+        g "main :- [0-9]." "main :- ['0'-'9'].\n"
       it "should parse simple grammar (repsep)" $
         g "main :- repSep(., '?')." "main :- repSep(.,'?').\n"
+      it "should parse simple grammar (repsep 2)" $
+        g "main :- repSep([foo,bar,buz], (ws|ww|\"\\n\"))." "main :- repSep([foo,bar,buz],(ws|ww|\"\\n\")).\n"
+      it "should parse simple grammar (repsep alt)" $
+        g "main :- +[foo,bar,buz] // (ws|ww|\"\\n\")." "main :- repSep([foo,bar,buz],(ws|ww|\"\\n\")).\n"
       it "should parse simple grammar (sequence 1)" $
         g "main :- [.,a,b]." "main :- [.,a,b].\n"
       it "should parse simple grammar (sequence 2)" $
@@ -43,8 +51,10 @@ main = launchAff_ $ runSpec [consoleReporter] do
         g "main :- (.|'a'|'b')." "main :- (.|'a'|'b').\n"
       it "should parse simple grammar (rule)" $
         g "main :- rule." "main :- rule.\n"
+      it "should parse simple grammar (rule with capture)" $
+        g "main :- foo:rule." "main :- foo:rule.\n"
       it "should parse grammar with comments" $
-        g "# comment\nmain :- .\n" "---"
+        g "# comment\nmain :- foo.\n" "main :- foo.\n"
       it "should parse weird grammar with spaces" $
         g "main    :-    [ . , . ]    ." "main :- [.,.].\n"
       it "should parse weird grammar ending with EOL" $
@@ -57,6 +67,8 @@ main = launchAff_ $ runSpec [consoleReporter] do
         g "some :- 'x'." "main :- ???.\nsome :- 'x'."
       it "should parse simple grammar with several rules" $
         g "main :- some.\nsome :- .." "main :- some.\nsome :- .."
+      it "should parse simple grammar with several rules end empty lines" $
+        g "main :- some.\n\nsome :- .." "main :- some.\nsome :- .."
 
 
 

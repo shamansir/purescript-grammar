@@ -48,12 +48,12 @@ emptyLine =
 
 commentLine :: P Unit
 commentLine =
-    void $ P.manyTill_ P.anyChar eol
+    void $ P.char '#' *> P.manyTill_ P.anyChar eol
 
 
 ruleLine :: P (Grammar.RuleName /\ Grammar.Rule)
 ruleLine = do --defer \_ -> do
-    ruleName <- PA.many1 P.alphaNum
+    ruleName <- _ident
     ws
     _ <- P.string ":-"
     ws
@@ -62,37 +62,24 @@ ruleLine = do --defer \_ -> do
     _ <- P.char '.'
     ws
     P.optional (P.try eol)
-    pure $ toString ruleName /\ theRule
+    pure $ ruleName /\ theRule
 
 
 rule :: P Grammar.Rule
 rule = defer \_ ->
     P.choice
-        -- FIXME: using P.try in choice is considered bad practice
-        [ P.try anyChar <?> "any char rule"
-        , P.try seq <?> "sequence rule"
-        , P.try choice <?> "choice rule"
-        , P.try text <?> "text rule"
-        , P.try charRange <?> "char range rule"
-        , P.try notChar <?> "not-char rule"
-        , P.try char <?> "char rule"
-        , P.try repSep <?> "rep-sep rule"
-        , P.try repSepAlt <?> "rep-sep-alt rule"
-        , P.try ref <?> "ref rule"
-        , P.try placeholder <?> "placeholder rule"
+        [ anyChar <?> "any char rule"
+        , seq <?> "sequence rule"
+        , choice <?> "choice rule"
+        , text <?> "text rule"
+        , charRange <?> "char range rule"
+        , notChar <?> "not-char rule"
+        , char <?> "char rule"
+        , repSep <?> "rep-sep rule"
+        , repSepAlt <?> "rep-sep-alt rule"
+        , ref <?> "ref rule"
+        , placeholder <?> "placeholder rule"
         ]
-        -- [ anyChar
-        -- , seq
-        -- , choice
-        -- , text
-        -- , charRange
-        -- , notChar
-        -- , char
-        -- , ref
-        -- , repSep
-        -- , repSepAlt
-        -- , placeholder
-        -- ]
 
 
 anyChar :: P Grammar.Rule
@@ -151,7 +138,7 @@ char = defer \_ ->
 notChar :: P Grammar.Rule
 notChar = defer \_ ->
     Grammar.CharRule <$>
-    Grammar.Single <$> do
+    Grammar.Not <$> do
     (P.char '^' *> _char)
 
 
