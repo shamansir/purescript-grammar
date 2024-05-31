@@ -2,6 +2,7 @@ module Grammar.Parser where
 
 import Prelude
 
+import Data.Tuple (uncurry) as Tuple
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.String.CodeUnits as String
 import Data.Array as Array
@@ -30,7 +31,7 @@ parser =
     map
         (Array.catMaybes >>> Map.fromFoldable >>> makeGrammar)
         <$> PA.many
-            $ P.choice [ Just <$> ruleLine, Nothing <$ emptyLine ]
+            $ P.choice [ Just <$> ruleLine, Nothing <$ emptyLine, Nothing <$ commentLine ]
     where
         makeGrammar map =
             Grammar.from
@@ -43,13 +44,9 @@ emptyLine =
     ws <* eol
 
 
-ws :: P Unit
-ws = P.skipSpaces
-
-
-ws1 :: P Unit
-ws1 =
-    void $ PA.many1 P.space
+commentLine :: P Unit
+commentLine =
+    void $ P.manyTill_ P.anyChar eol
 
 
 ruleLine :: P (Grammar.RuleName /\ Grammar.Rule)
@@ -61,6 +58,8 @@ ruleLine = do --defer \_ -> do
     theRule <- rule
     ws
     _ <- P.char '.'
+    ws
+    P.optional (P.try eol)
     pure $ toString ruleName /\ theRule
 
 
@@ -69,6 +68,15 @@ rule = defer \_ ->
     P.choice
         [ anyChar
         , seq
+        , choice
+        , text
+        , charRange
+        , notChar
+        , char
+        , ref
+        , repSep
+        , repSepAlt
+        , placeholder
         ]
 
 
@@ -85,6 +93,125 @@ seq = defer \_ ->
         (P.char '[')
         (P.char ']')
         (P.sepBy1 (ws *> rule <* ws) $ P.char ',')
+
+
+choice :: P Grammar.Rule
+choice = defer \_ ->
+    Grammar.Choice <$>
+    NEL.toUnfoldable <$>
+    P.between
+        (P.char '(')
+        (P.char ')')
+        (P.sepBy1 (ws *> rule <* ws) $ P.char '|')
+
+
+ref :: P Grammar.Rule
+ref = defer \_ -> do
+    mbCapture <- P.optionMaybe $ do
+        captureName <- _ident
+        _ <- P.char ':'
+        pure captureName
+    ruleName <- _ident
+    pure $ Grammar.Ref mbCapture ruleName
+
+
+text :: P Grammar.Rule
+text = defer \_ ->
+    Grammar.Text <$>
+    String.fromCharArray <$>
+    P.between
+        (P.char '"')
+        (P.char '"')
+        (PA.many P.anyChar)
+
+
+char :: P Grammar.Rule
+char = defer \_ ->
+    Grammar.CharRule <$>
+    Grammar.Single <$>
+    _char
+
+
+notChar :: P Grammar.Rule
+notChar = defer \_ ->
+    Grammar.CharRule <$>
+    Grammar.Single <$> do
+    (P.char '^' *> _char)
+
+
+charRange :: P Grammar.Rule
+charRange = defer \_ ->
+    Grammar.CharRule <$>
+    Tuple.uncurry Grammar.Range <$>
+    P.between
+        (P.char '[')
+        (P.char ']')
+        (do
+            from <- P.alphaNum
+            void $ P.char '-'
+            to <- P.alphaNum
+            pure $ from /\ to
+        )
+
+
+placeholder :: P Grammar.Rule
+placeholder = defer \_ ->
+    pure Grammar.Placeholder <* P.string "???"
+
+
+repSep :: P Grammar.Rule
+repSep = defer \_ ->
+    Tuple.uncurry Grammar.RepSep <$> do
+        void $ P.string "repSep"
+        P.between
+            (P.char '(')
+            (P.char ')')
+            (do
+                ws
+                rep <- rule
+                ws
+                void $ P.char ','
+                ws
+                sep <- rule
+                ws
+                pure $ rep /\ sep
+            )
+
+
+repSepAlt :: P Grammar.Rule
+repSepAlt = defer \_ ->
+    Tuple.uncurry Grammar.RepSep <$> do
+        rep <- rule
+        void $ P.char '+'
+        ws
+        void $ P.string "//"
+        ws
+        sep <- rule
+        ws
+        pure $ rep /\ sep
+
+
+_ident :: P String
+_ident =
+    String.fromCharArray
+    <$> PA.many P.alphaNum
+
+
+_char :: P Char
+_char =
+    P.between
+        (P.char '\'')
+        (P.char '\'')
+        (P.anyChar)
+
+
+ws :: P Unit
+ws = P.skipSpaces
+
+
+ws1 :: P Unit
+ws1 =
+    void $ PA.many1 P.space
 
 
 eol :: P Unit
