@@ -11,20 +11,21 @@ import Data.Either (Either(..))
 
 import Effect (Effect)
 import Effect.Aff (launchAff_, delay)
-import Test.Spec (pending, describe, it, itOnly)
+import Test.Spec (pending, describe, it, itOnly, pending')
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
 
 
 import Grammar.Parser (parser) as Grammar
-import Parsing (Parser, runParser, ParseError)
+import Grammar.With (parse) as WithGrammar
+import Parsing (Parser, runParser, ParseError(..), Position(..))
 
 
 main :: Effect Unit
 main = launchAff_ $ runSpec [consoleReporter] do
   describe "purescript-grammar" do
-    describe "Grammar" do
+    describe "parsing grammars (inline)" do
       it "should parse simple grammar (string)" $
         g "main :- \"foobar\".\n" "main :- \"foobar\".\n"
       it "should parse simple grammar (char)" $
@@ -40,7 +41,9 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "should parse simple grammar (repsep 2)" $
         g "main :- repSep([foo,bar,buz], (ws|ww|\"\\n\"))." "main :- repSep([foo,bar,buz],(ws|ww|\"\\n\")).\n"
       it "should parse simple grammar (repsep alt)" $
-        g "main :- +[foo,bar,buz] // (ws|ww|\"\\n\")." "main :- repSep([foo,bar,buz],(ws|ww|\"\\n\")).\n"
+        g "main :- / foo+ // ws /." "main :- repSep(foo,ws).\n"
+      it "should parse simple grammar (repsep alt 2)" $
+        g "main :- /[foo,bar,buz]+ // (ws|ww|\"\\n\")/." "main :- repSep([foo,bar,buz],(ws|ww|\"\\n\")).\n"
       it "should parse simple grammar (sequence 1)" $
         g "main :- [.,a,b]." "main :- [.,a,b].\n"
       it "should parse simple grammar (sequence 2)" $
@@ -69,14 +72,33 @@ main = launchAff_ $ runSpec [consoleReporter] do
         g "main :- some.\nsome :- .." "main :- some.\nsome :- .."
       it "should parse simple grammar with several rules end empty lines" $
         g "main :- some.\n\nsome :- .." "main :- some.\nsome :- .."
+      pending' "properly fails when there's no dot in the end of the rule" $
+        gerr "main :- some" $ perr "no dot in the end of the rule" 1 1 0
+    describe "parsing with grammars" do
+      it "failing to parse" $
+        pwith "?" "main :- \"foo\"." "-"
+      it "parsing strings" $
+        pwith "\"foo\"" "main :- \"foo\"." "main"
 
 
 
 g ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String → m Unit
-g str expectation =
-  (show <$> runParser str Grammar.parser) `shouldEqual` (Right expectation)
+g grammarStr expectation =
+  (show <$> runParser grammarStr Grammar.parser) `shouldEqual` (Right expectation)
 
 
 gerr ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → ParseError → m Unit
-gerr str error =
-  (show <$> runParser str Grammar.parser) `shouldEqual` (Left error)
+gerr grammarStr error =
+  (show <$> runParser grammarStr Grammar.parser) `shouldEqual` (Left error)
+
+
+perr :: String -> Int -> Int -> Int -> ParseError
+perr err line column index = ParseError err $ Position { line, column, index }
+
+
+pwith :: ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String -> String → m Unit
+pwith str grammarStr expectation =
+  let
+    eGrammar = runParser grammarStr Grammar.parser
+    ast grammar = WithGrammar.parse grammar (const 0) str
+  in (show <$> ast <$> eGrammar) `shouldEqual` (Right expectation)

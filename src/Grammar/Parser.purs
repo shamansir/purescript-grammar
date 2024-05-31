@@ -34,6 +34,7 @@ parser =
         (NEA.toArray >>> Array.catMaybes >>> Map.fromFoldable >>> makeGrammar)
         <$> PA.many1
             $ P.choice [ Just <$> ruleLine, Nothing <$ emptyLine, Nothing <$ commentLine ]
+        <?> "expected at least one rule"
     where
         makeGrammar map =
             Grammar.from
@@ -43,12 +44,12 @@ parser =
 
 emptyLine :: P Unit
 emptyLine =
-    ws <* eol
+    ws <* eol <?> "expected empty line"
 
 
 commentLine :: P Unit
 commentLine =
-    void $ P.char '#' *> P.manyTill_ P.anyChar eol
+    void $ P.char '#' *> P.manyTill_ P.anyChar eol <?> "expected comment"
 
 
 ruleLine :: P (Grammar.RuleName /\ Grammar.Rule)
@@ -63,6 +64,7 @@ ruleLine = do --defer \_ -> do
     ws
     P.optional (P.try eol)
     pure $ ruleName /\ theRule
+    <?> "expected rule line"
 
 
 rule :: P Grammar.Rule
@@ -79,7 +81,7 @@ rule = defer \_ ->
         , repSepAlt <?> "rep-sep-alt rule"
         , ref <?> "ref rule"
         , placeholder <?> "placeholder rule"
-        ]
+        ] <?> "one of the rules"
 
 
 anyChar :: P Grammar.Rule
@@ -184,21 +186,27 @@ repSep = defer \_ ->
 repSepAlt :: P Grammar.Rule
 repSepAlt = defer \_ ->
     Tuple.uncurry Grammar.RepSep <$> do
-        void $ P.string "+" -- eliminates left recursion
-        rep <- rule
-        ws
-        void $ P.string "//"
-        ws
-        sep <- rule
-        ws
-        pure $ rep /\ sep
+        P.between
+            (P.char '/')
+            (P.char '/')
+            (do
+                ws
+                rep <- rule
+                void $ P.char '+'
+                ws
+                void $ P.string "//"
+                ws
+                sep <- rule
+                ws
+                pure $ rep /\ sep
+            )
 
 
 _ident :: P String
 _ident =
     String.fromCharArray
     <$> NEA.toArray
-    <$> PA.many1 P.alphaNum
+    <$> (PA.many1 P.alphaNum <?> "expected identifier")
 
 
 _char :: P Char
@@ -223,11 +231,11 @@ ws = P.skipSpaces
 
 ws1 :: P Unit
 ws1 =
-    void $ PA.many1 P.space
+    void $ PA.many1 P.space <?> "expected whitespace"
 
 
 eol :: P Unit
-eol = void $ P.char '\n'
+eol = void $ P.char '\n' <?> "expected EOL"
 
 
 toString :: NonEmptyArray Char -> String
