@@ -8,9 +8,11 @@ import Grammar (main, find, findIn, set) as G
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Either (Either(..))
 import Data.Traversable (for)
+import Data.TraversableWithIndex (forWithIndex)
+import Data.FunctorWithIndex (mapWithIndex)
 import Data.Array (singleton, fromFoldable) as Array
 
-import Parsing (Parser, ParseError, runParser)
+import Parsing (Parser, ParseError, Position(..), runParser)
 import Parsing (position, fail) as P
 import Parsing.Combinators ((<?>))
 import Parsing.Combinators as P
@@ -30,12 +32,20 @@ parse grammar f str =
 parseRule :: forall a. RuleSet -> (Rule -> a) -> RuleName -> Rule -> P (AST a)
 parseRule set f rname rule =
     case rule of
-        Text text -> ql $ P.string text
-        CharRule (Single ch) -> ql $ P.char ch
+        Text text -> qleaf $ P.string text
+        CharRule (Single ch) -> qleaf $ P.char ch
+        CharRule (Not ch) -> qleaf $ do
+            mbExclude <- P.optionMaybe $ P.try $ P.char ch
+            case mbExclude of
+                Just x -> P.fail $ "found " <> show x
+                Nothing -> pure unit
+        CharRule (Range from to) ->
+            qleaf $ pure unit -- FIXME: TODO
+        CharRule Any -> qleaf P.anyChar
         Sequence rules ->
-            qn $ for rules $ parseRule set f "ch"
+            qnode $ for rules $ parseRule set f "ch"
         Choice rules ->
-            qn $ Array.singleton <$> (P.choice $ parseRule set f "ch" <$> rules)
+            qnode $ Array.singleton <$> (P.choice $ parseRule set f "ch" <$> rules)
         Ref mbCapture ruleName ->
             case G.findIn set ruleName of
                 Just rule -> parseRule set f (mbCapture # fromMaybe ruleName) rule
@@ -45,20 +55,21 @@ parseRule set f rname rule =
                 prep = parseRule set f "rep" rep
                 psep = parseRule set f "sep" sep
             in
-                qn $ Array.fromFoldable <$> P.sepBy1 prep psep
-        _ -> pure Nil
+                qnode $ Array.fromFoldable <$> P.sepBy1 prep psep
+        Placeholder ->
+            qleaf $ P.string "??"
     where
-        ql :: forall z. P z -> P (AST a)
-        ql = withRange leaf
-        qn :: P (Array (AST a)) -> P (AST a)
-        qn = withRange node
+        qleaf :: forall z. P z -> P (AST a)
+        qleaf = withRange leaf
+        qnode :: P (Array (AST a)) -> P (AST a)
+        qnode = withRange node
         leaf :: forall x. x -> Range -> AST a
         leaf _ rng = Leaf rname rule rng $ f rule
         node :: Array (AST a) -> Range -> AST a
         node rules rng = Node rname rule rng (f rule) rules
         withRange :: forall c z. (c -> Range -> z) -> P c -> P z
         withRange frng p = do
-            posBefore <- P.position
+            (Position posBefore) <- P.position
             res <- p
-            posAfter <- P.position
-            pure $ frng res { start : 0, end : 0 }
+            (Position posAfter) <- P.position
+            pure $ frng res { start : posBefore.index, end : posAfter.index }

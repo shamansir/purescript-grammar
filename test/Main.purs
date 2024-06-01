@@ -89,8 +89,12 @@ main = launchAff_ $ runSpec [consoleReporter] do
         pwith "foo" "main :- \"foo\"." "main"
       it "parsing chars" $
         pwith "f" "main :- 'f'." "main"
+      it "parsing negated chars" $
+        pwith "o" "main :- ^'f'." "main"
       it "parsing char sequences" $
         pwith "foo" "main :- ['f','o','o']." "main"
+      it "parsing any-char sequences" $
+        pwith "foo" "main :- [.,.,.]." "main"
       it "parsing char's and rule sequences" $
         pwith "foo"
           """main :- [f,o,o].
@@ -110,6 +114,12 @@ main = launchAff_ $ runSpec [consoleReporter] do
         pwith "foo"
           """main :- repSep(fo,"").
           fo :- ('f'|'o').
+          """
+          "main"
+      it "capture works" $
+        pwith "[a-z]"
+          """main :- ['[',from:char,'-',to:char,']'].
+          char :- ('a'|'z').
           """
           "main"
 

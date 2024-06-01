@@ -43,6 +43,16 @@ type CaptureName = String
 type Range = { start :: Int, end :: Int }
 
 
+{-
+data MatchAt
+    = AtRule RuleName Rule
+    | InSeqence MatchAt Int Rule
+    | ChoiceOf MatchAt Int Rule
+    | RepOf MatchAt Rule
+    | SepOf MatchAt Rule
+-}
+
+
 data AST a
     = Nil
     | Leaf RuleName Rule Range a
