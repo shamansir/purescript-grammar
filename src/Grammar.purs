@@ -10,7 +10,10 @@ import Data.Tuple (Tuple(..))
 import Data.Tuple (uncurry) as Tuple
 
 
-data Grammar = Grammar Rule (Map RuleName Rule)
+type RuleSet = Map RuleName Rule
+
+
+data Grammar = Grammar Rule RuleSet
 
 
 data CharRule
@@ -64,7 +67,15 @@ main (Grammar m _) = m
 
 
 find :: Grammar -> RuleName -> Maybe Rule
-find (Grammar _ map) rn = Map.lookup rn map
+find = set >>> findIn
+
+
+set :: Grammar -> RuleSet
+set (Grammar _ s) = s
+
+
+findIn :: RuleSet -> RuleName -> Maybe Rule
+findIn = flip Map.lookup
 
 
 instance Show CharRule where

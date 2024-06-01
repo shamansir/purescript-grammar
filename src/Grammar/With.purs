@@ -2,14 +2,16 @@ module Grammar.With where
 
 import Prelude
 
-import Grammar (Grammar, AST(..), Rule(..), CharRule(..), RuleName, Range)
-import Grammar (main, find) as G
+import Grammar (Grammar, AST(..), Rule(..), CharRule(..), RuleName, RuleSet, Range)
+import Grammar (main, find, findIn, set) as G
 
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Either (Either(..))
 import Data.Traversable (for)
+import Data.Array (singleton, fromFoldable) as Array
 
 import Parsing (Parser, ParseError, runParser)
-import Parsing (position) as P
+import Parsing (position, fail) as P
 import Parsing.Combinators ((<?>))
 import Parsing.Combinators as P
 import Parsing.Combinators.Array as PA
@@ -22,16 +24,28 @@ type P a = Parser String a
 
 parse :: forall a. Grammar -> (Rule -> a) -> String -> Either ParseError (AST a)
 parse grammar f str =
-    runParser str $ parseRule f "main" $ G.main grammar
+    runParser str $ parseRule (G.set grammar) f "main" $ G.main grammar
 
 
-parseRule :: forall a. (Rule -> a) -> RuleName -> Rule -> P (AST a)
-parseRule f rname rule =
+parseRule :: forall a. RuleSet -> (Rule -> a) -> RuleName -> Rule -> P (AST a)
+parseRule set f rname rule =
     case rule of
         Text text -> ql $ P.string text
         CharRule (Single ch) -> ql $ P.char ch
         Sequence rules ->
-            qn $ for rules $ parseRule f "ch"
+            qn $ for rules $ parseRule set f "ch"
+        Choice rules ->
+            qn $ Array.singleton <$> (P.choice $ parseRule set f "ch" <$> rules)
+        Ref mbCapture ruleName ->
+            case G.findIn set ruleName of
+                Just rule -> parseRule set f (mbCapture # fromMaybe ruleName) rule
+                Nothing -> P.fail $ "Rule " <> ruleName <> " was not found in grammar"
+        RepSep rep sep ->
+            let
+                prep = parseRule set f "rep" rep
+                psep = parseRule set f "sep" sep
+            in
+                qn $ Array.fromFoldable <$> P.sepBy1 prep psep
         _ -> pure Nil
     where
         ql :: forall z. P z -> P (AST a)

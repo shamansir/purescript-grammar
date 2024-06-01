@@ -76,6 +76,12 @@ main = launchAff_ $ runSpec [consoleReporter] do
         g "\n\n\nmain :- \"foo\"." "main :- \"foo\""
       pending' "properly fails when there's no dot in the end of the rule" $
         gerr "main :- some" $ perr "no dot in the end of the rule" 1 1 0
+      it "collects all rules" $
+        g
+          """main :- repSep(fo,',').
+          fo :- ('f'|'o').
+          """
+          "main :- repSep(fo,',').\nfo :- ('f'|'o')."
     describe "parsing with grammars" do
       pending' "failing to parse" $
         pwith "?" "main :- \"foo\"." "-"
@@ -85,11 +91,25 @@ main = launchAff_ $ runSpec [consoleReporter] do
         pwith "f" "main :- 'f'." "main"
       it "parsing char sequences" $
         pwith "foo" "main :- ['f','o','o']." "main"
-      it "parsing char's and sequences" $
+      it "parsing char's and rule sequences" $
         pwith "foo"
           """main :- [f,o,o].
           f :- 'f'.
           o :- 'o'.
+          """
+          "main"
+      it "parsing char choice" $
+        pwith "o" "main :- ('f'|'o'|'o')." "main"
+      it "parsing rep/sep" $
+        pwith "f,o,o"
+          """main :- repSep(fo,',').
+          fo :- ('f'|'o').
+          """
+          "main"
+      pending' "parsing rep/sep 2" $
+        pwith "foo"
+          """main :- repSep(fo,"").
+          fo :- ('f'|'o').
           """
           "main"
 
