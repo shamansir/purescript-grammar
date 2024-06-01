@@ -43,20 +43,19 @@ type CaptureName = String
 type Range = { start :: Int, end :: Int }
 
 
-{-
 data MatchAt
-    = AtRule RuleName Rule
-    | InSeqence MatchAt Int Rule
-    | ChoiceOf MatchAt Int Rule
-    | RepOf MatchAt Rule
-    | SepOf MatchAt Rule
--}
+    = Main
+    | AtRule RuleName
+    | InSequence Int
+    | ChoiceOf Int
+    | RepOf
+    | SepOf
 
 
 data AST a
     = Nil
-    | Leaf RuleName Rule Range a
-    | Node RuleName Rule Range a (Array (AST a))
+    | Leaf MatchAt Rule Range a
+    | Node MatchAt Rule Range a (Array (AST a))
 
 
 
@@ -120,11 +119,36 @@ instance Show Grammar where
                 name <> " :- " <> show rule <> "."
 
 
+instance Show MatchAt where
+    show = case _ of
+        Main -> "<main>"
+        AtRule ruleName -> "rule:" <> ruleName
+        InSequence idx -> "seq:" <> show idx
+        ChoiceOf idx -> "ch:" <> show idx
+        RepOf -> "rep"
+        SepOf -> "sep"
+
+
 
 instance Show a => Show (AST a) where
     show = case _ of
         Nil -> "-"
-        Node a _ _ _ [] -> "{{" <> show a <> "}}"
-        Node a _ _ _ children -> "{{" <> show a <> "}}:[[" <> String.joinWith "," (show <$> children) <> "]]"
-        Leaf ruleName _ range a ->
-            "<<" <> show range <> "{{" <> show a <> "}}" <> show ruleName <> ">>"
+        Node match rule range a [] ->
+            "( " <> show a <> " " <> show match <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end <> " | " <> "∅" <> " )"
+        Node match rule range a children ->
+            "( " <> show a <> " " <> show match <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end <> " | " <> String.joinWith " : " (show <$> children) <> " )"
+        Leaf match rule range a ->
+            "( " <> show a <> " " <> show match <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end <> " )"
+        where
+            ruleType = case _ of
+                Sequence _ -> "seqnc"
+                Choice _ -> "choice"
+                Ref _ name -> "ref:" <> name
+                Text _ -> "text"
+                CharRule r -> case r of
+                    Single _ -> "char"
+                    Any -> "any"
+                    Not _ -> "not-char"
+                    Range _ _ -> "char-range"
+                RepSep _ _ -> "repsep"
+                Placeholder -> "-"

@@ -25,6 +25,7 @@ import Parsing (Parser, runParser, ParseError(..), Position(..))
 main :: Effect Unit
 main = launchAff_ $ runSpec [consoleReporter] do
   describe "purescript-grammar" do
+
     describe "parsing grammars (inline)" do
       it "should parse simple grammar (string)" $
         g "main :- \"foobar\".\n" "main :- \"foobar\".\n"
@@ -82,46 +83,68 @@ main = launchAff_ $ runSpec [consoleReporter] do
           fo :- ('f'|'o').
           """
           "main :- repSep(fo,',').\nfo :- ('f'|'o')."
+
     describe "parsing with grammars" do
       pending' "failing to parse" $
-        pwith "?" "main :- \"foo\"." "-"
+        pwith
+          "?"
+          """main :- "foo"."""
+          "-"
       it "parsing strings" $
-        pwith "foo" "main :- \"foo\"." "main"
+        pwith
+          "foo"
+          """main :- "foo"."""
+          """( 0 <main> text 0-3 )"""
       it "parsing chars" $
-        pwith "f" "main :- 'f'." "main"
+        pwith
+          "f"
+          "main :- 'f'."
+          """( 0 <main> char 0-1 )"""
       it "parsing negated chars" $
-        pwith "o" "main :- ^'f'." "main"
+        pwith
+          "o"
+          "main :- ^'f'."
+          """( 0 <main> not-char 0-1 )"""
       it "parsing char sequences" $
-        pwith "foo" "main :- ['f','o','o']." "main"
+        pwith
+          "foo"
+          "main :- ['f','o','o']."
+          "( 0 <main> seqnc 0-3 | ( 0 seq:0 char 0-1 ) : ( 0 seq:1 char 1-2 ) : ( 0 seq:2 char 2-3 ) )"
       it "parsing any-char sequences" $
-        pwith "foo" "main :- [.,.,.]." "main"
+        pwith
+          "foo"
+          "main :- [.,.,.]."
+          "( 0 <main> seqnc 0-3 | ( 0 seq:0 any 0-1 ) : ( 0 seq:1 any 1-2 ) : ( 0 seq:2 any 2-3 ) )"
       it "parsing char's and rule sequences" $
         pwith "foo"
           """main :- [f,o,o].
           f :- 'f'.
           o :- 'o'.
           """
-          "main"
+          "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:o char 1-2 ) : ( 0 rule:o char 2-3 ) )"
       it "parsing char choice" $
-        pwith "o" "main :- ('f'|'o'|'o')." "main"
+        pwith
+          "o"
+          "main :- ('f'|'o'|'o')."
+          "( 0 <main> choice 0-1 | ( 0 ch:1 char 0-1 ) )"
       it "parsing rep/sep" $
         pwith "f,o,o"
           """main :- repSep(fo,',').
           fo :- ('f'|'o').
           """
-          "main"
+          "( 0 <main> repsep 0-5 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 rule:fo choice 4-5 | ( 0 ch:1 char 4-5 ) ) )"
       pending' "parsing rep/sep 2" $
         pwith "foo"
           """main :- repSep(fo,"").
           fo :- ('f'|'o').
           """
-          "main"
+          "( 0 <main> repsep 0-5 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 rule:fo choice 4-5 | ( 0 ch:1 char 4-5 ) ) )"
       it "capture works" $
         pwith "[a-z]"
           """main :- ['[',from:char,'-',to:char,']'].
           char :- ('a'|'z').
           """
-          "main"
+          "( 0 <main> seqnc 0-5 | ( 0 seq:0 char 0-1 ) : ( 0 rule:from choice 1-2 | ( 0 ch:0 char 1-2 ) ) : ( 0 seq:2 char 2-3 ) : ( 0 rule:to choice 3-4 | ( 0 ch:1 char 3-4 ) ) : ( 0 seq:4 char 4-5 ) )"
 
 
 

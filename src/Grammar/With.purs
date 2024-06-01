@@ -2,7 +2,7 @@ module Grammar.With where
 
 import Prelude
 
-import Grammar (Grammar, AST(..), Rule(..), CharRule(..), RuleName, RuleSet, Range)
+import Grammar (Grammar, AST(..), Rule(..), CharRule(..), MatchAt(..), RuleName, RuleSet, Range)
 import Grammar (main, find, findIn, set) as G
 
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -26,11 +26,11 @@ type P a = Parser String a
 
 parse :: forall a. Grammar -> (Rule -> a) -> String -> Either ParseError (AST a)
 parse grammar f str =
-    runParser str $ parseRule (G.set grammar) f "main" $ G.main grammar
+    runParser str $ parseRule (G.set grammar) f Main $ G.main grammar
 
 
-parseRule :: forall a. RuleSet -> (Rule -> a) -> RuleName -> Rule -> P (AST a)
-parseRule set f rname rule =
+parseRule :: forall a. RuleSet -> (Rule -> a) -> MatchAt -> Rule -> P (AST a)
+parseRule set f match rule =
     case rule of
         Text text -> qleaf $ P.string text
         CharRule (Single ch) -> qleaf $ P.char ch
@@ -43,17 +43,17 @@ parseRule set f rname rule =
             qleaf $ pure unit -- FIXME: TODO
         CharRule Any -> qleaf P.anyChar
         Sequence rules ->
-            qnode $ for rules $ parseRule set f "ch"
+            qnode $ forWithIndex rules $ \idx -> parseRule set f $ InSequence idx
         Choice rules ->
-            qnode $ Array.singleton <$> (P.choice $ parseRule set f "ch" <$> rules)
+            qnode $ Array.singleton <$> (P.choice $ mapWithIndex (\idx -> parseRule set f $ ChoiceOf idx) rules)
         Ref mbCapture ruleName ->
             case G.findIn set ruleName of
-                Just rule -> parseRule set f (mbCapture # fromMaybe ruleName) rule
+                Just rule -> parseRule set f (AtRule $ mbCapture # fromMaybe ruleName) rule
                 Nothing -> P.fail $ "Rule " <> ruleName <> " was not found in grammar"
         RepSep rep sep ->
             let
-                prep = parseRule set f "rep" rep
-                psep = parseRule set f "sep" sep
+                prep = parseRule set f RepOf rep
+                psep = parseRule set f SepOf sep
             in
                 qnode $ Array.fromFoldable <$> P.sepBy1 prep psep
         Placeholder ->
@@ -64,9 +64,9 @@ parseRule set f rname rule =
         qnode :: P (Array (AST a)) -> P (AST a)
         qnode = withRange node
         leaf :: forall x. x -> Range -> AST a
-        leaf _ rng = Leaf rname rule rng $ f rule
+        leaf _ rng = Leaf match rule rng $ f rule
         node :: Array (AST a) -> Range -> AST a
-        node rules rng = Node rname rule rng (f rule) rules
+        node rules rng = Node match rule rng (f rule) rules
         withRange :: forall c z. (c -> Range -> z) -> P c -> P z
         withRange frng p = do
             (Position posBefore) <- P.position
