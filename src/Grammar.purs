@@ -4,7 +4,7 @@ import Prelude
 
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Map (Map)
-import Data.Map (empty, toUnfoldable) as Map
+import Data.Map (empty, lookup, toUnfoldable) as Map
 import Data.String (joinWith) as String
 import Data.Tuple (Tuple(..))
 import Data.Tuple (uncurry) as Tuple
@@ -42,8 +42,8 @@ type Range = { start :: Int, end :: Int }
 
 data AST a
     = Nil
-    | Node a (Array (AST a))
     | Leaf RuleName Rule Range a
+    | Node RuleName Rule Range a (Array (AST a))
 
 
 
@@ -59,8 +59,12 @@ from :: Rule -> Map RuleName Rule -> Grammar
 from = Grammar
 
 
-parse :: forall a. Grammar -> (Rule -> a) -> String -> AST a
-parse _ _ _ = Nil
+main :: Grammar -> Rule
+main (Grammar m _) = m
+
+
+find :: Grammar -> RuleName -> Maybe Rule
+find (Grammar _ map) rn = Map.lookup rn map
 
 
 instance Show CharRule where
@@ -99,7 +103,7 @@ instance Show Grammar where
 instance Show a => Show (AST a) where
     show = case _ of
         Nil -> "-"
-        Node a [] -> "{{" <> show a <> "}}"
-        Node a children -> "{{" <> show a <> "}}:[[" <> String.joinWith "," (show <$> children) <> "]]"
+        Node a _ _ _ [] -> "{{" <> show a <> "}}"
+        Node a _ _ _ children -> "{{" <> show a <> "}}:[[" <> String.joinWith "," (show <$> children) <> "]]"
         Leaf ruleName _ range a ->
             "<<" <> show range <> "{{" <> show a <> "}}" <> show ruleName <> ">>"

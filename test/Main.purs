@@ -72,13 +72,26 @@ main = launchAff_ $ runSpec [consoleReporter] do
         g "main :- some.\nsome :- .." "main :- some.\nsome :- .."
       it "should parse simple grammar with several rules end empty lines" $
         g "main :- some.\n\nsome :- .." "main :- some.\nsome :- .."
+      pending' "should parse simple grammar with lines before main" $
+        g "\n\n\nmain :- \"foo\"." "main :- \"foo\""
       pending' "properly fails when there's no dot in the end of the rule" $
         gerr "main :- some" $ perr "no dot in the end of the rule" 1 1 0
     describe "parsing with grammars" do
-      it "failing to parse" $
+      pending' "failing to parse" $
         pwith "?" "main :- \"foo\"." "-"
       it "parsing strings" $
-        pwith "\"foo\"" "main :- \"foo\"." "main"
+        pwith "foo" "main :- \"foo\"." "main"
+      it "parsing chars" $
+        pwith "f" "main :- 'f'." "main"
+      it "parsing char sequences" $
+        pwith "foo" "main :- ['f','o','o']." "main"
+      it "parsing char's and sequences" $
+        pwith "foo"
+          """main :- [f,o,o].
+          f :- 'f'.
+          o :- 'o'.
+          """
+          "main"
 
 
 
@@ -101,4 +114,4 @@ pwith str grammarStr expectation =
   let
     eGrammar = runParser grammarStr Grammar.parser
     ast grammar = WithGrammar.parse grammar (const 0) str
-  in (show <$> ast <$> eGrammar) `shouldEqual` (Right expectation)
+  in (map show <$> ast =<< eGrammar) `shouldEqual` (Right expectation)

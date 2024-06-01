@@ -33,7 +33,7 @@ parser =
     map
         (NEA.toArray >>> Array.catMaybes >>> Map.fromFoldable >>> makeGrammar)
         <$> PA.many1
-            $ P.choice [ Just <$> ruleLine, Nothing <$ emptyLine, Nothing <$ commentLine ]
+            $ P.choice [ Nothing <$ emptyLine, Nothing <$ commentLine, Just <$> ruleLine ]
         <?> "expected at least one rule"
     where
         makeGrammar map =
