@@ -52,10 +52,17 @@ data MatchAt
     | SepOf
 
 
+type Match =
+    { range :: Range -- in
+    , match :: MatchAt -- parent
+    , rule :: Rule
+    }
+
+
 data AST a
     = Nil
-    | Leaf MatchAt Rule Range a
-    | Node MatchAt Rule Range a (Array (AST a))
+    | Leaf Match a
+    | Node Match a (Array (AST a))
 
 
 
@@ -133,13 +140,15 @@ instance Show MatchAt where
 instance Show a => Show (AST a) where
     show = case _ of
         Nil -> "-"
-        Node match rule range a [] ->
-            "( " <> show a <> " " <> show match <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end <> " | " <> "∅" <> " )"
-        Node match rule range a children ->
-            "( " <> show a <> " " <> show match <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end <> " | " <> String.joinWith " : " (show <$> children) <> " )"
-        Leaf match rule range a ->
-            "( " <> show a <> " " <> show match <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end <> " )"
+        Node match a [] ->
+            "( " <> show a <> " " <> smatch match <> " | " <> "∅" <> " )"
+        Node match a children ->
+            "( " <> show a <> " " <> smatch match <> " | " <> String.joinWith " : " (show <$> children) <> " )"
+        Leaf match a ->
+            "( " <> show a <> " " <> smatch match <> " )"
         where
+            smatch { match, range, rule } =
+                show match <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end
             ruleType = case _ of
                 Sequence _ -> "seqnc"
                 Choice _ -> "choice"

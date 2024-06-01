@@ -64,9 +64,9 @@ parseRule set f match rule =
         qnode :: P (Array (AST a)) -> P (AST a)
         qnode = withRange node
         leaf :: forall x. x -> Range -> AST a
-        leaf _ rng = Leaf match rule rng $ f rule
+        leaf _ range = Leaf { match, rule, range } $ f rule
         node :: Array (AST a) -> Range -> AST a
-        node rules rng = Node match rule rng (f rule) rules
+        node rules range = Node { match, rule, range } (f rule) rules
         withRange :: forall c z. (c -> Range -> z) -> P c -> P z
         withRange frng p = do
             (Position posBefore) <- P.position
