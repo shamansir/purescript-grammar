@@ -123,11 +123,11 @@ text :: P Grammar.Rule
 text = defer \_ ->
     Grammar.Text <$>
     String.fromCharArray <$>
-    NEA.toUnfoldable <$>
+    -- NEA.toUnfoldable <$>
     P.between
         (P.char '"')
         (P.char '"')
-        (PA.many1 $ _notBut (P.char '"') P.anyChar)
+        (PA.many $ _notBut (P.char '"') P.anyChar)
 
 
 char :: P Grammar.Rule

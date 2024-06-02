@@ -5,6 +5,8 @@ import Prelude
 import Grammar (Grammar, AST(..), Rule(..), CharRule(..), MatchAt(..), RuleName, RuleSet, Range)
 import Grammar (main, find, findIn, set) as G
 
+import Control.Lazy (defer)
+
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Either (Either(..))
 import Data.Traversable (for)
@@ -38,7 +40,7 @@ parseRule set f match rule =
             mbExclude <- P.optionMaybe $ P.try $ P.char ch
             case mbExclude of
                 Just x -> P.fail $ "found " <> show x
-                Nothing -> pure unit
+                Nothing -> P.anyChar *> pure unit
         CharRule (Range from to) ->
             qleaf $ pure unit -- FIXME: TODO
         CharRule Any -> qleaf P.anyChar
@@ -56,6 +58,7 @@ parseRule set f match rule =
                 psep = parseRule set f SepOf sep
             in
                 qnode $ Array.fromFoldable <$> P.sepBy1 prep psep
+                -- qnode $ _repSep prep psep
         Placeholder ->
             qleaf $ P.string "??"
     where
@@ -73,3 +76,8 @@ parseRule set f match rule =
             res <- p
             (Position posAfter) <- P.position
             pure $ frng res { start : posBefore.index, end : posAfter.index }
+
+
+_repSep :: forall a sep. P a -> P sep -> P (Array a)
+_repSep _ _ = defer \_ -> do
+    pure []

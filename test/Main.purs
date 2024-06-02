@@ -122,6 +122,14 @@ main = launchAff_ $ runSpec [consoleReporter] do
           o :- 'o'.
           """
           "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:o char 1-2 ) : ( 0 rule:o char 2-3 ) )"
+      it "parsing sequences with empty items" $
+        pwith "foo"
+          """main :- [f,nothing,o,nothing,o].
+          f :- 'f'.
+          o :- 'o'.
+          nothing :- "".
+          """
+          "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:nothing text 1-1 ) : ( 0 rule:o char 1-2 ) : ( 0 rule:nothing text 2-2 ) : ( 0 rule:o char 2-3 ) )"
       it "parsing char choice" $
         pwith
           "o"
@@ -133,12 +141,12 @@ main = launchAff_ $ runSpec [consoleReporter] do
           fo :- ('f'|'o').
           """
           "( 0 <main> repsep 0-5 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 rule:fo choice 4-5 | ( 0 ch:1 char 4-5 ) ) )"
-      pending' "parsing rep/sep 2" $
+      it "parsing rep/sep 2" $
         pwith "foo"
           """main :- repSep(fo,"").
           fo :- ('f'|'o').
           """
-          "( 0 <main> repsep 0-5 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 rule:fo choice 4-5 | ( 0 ch:1 char 4-5 ) ) )"
+          "( 0 <main> repsep 0-3 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 rule:fo choice 1-2 | ( 0 ch:1 char 1-2 ) ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) )"
       it "capture works" $
         pwith "[a-z]"
           """main :- ['[',from:char,'-',to:char,']'].
