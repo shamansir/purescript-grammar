@@ -3,6 +3,7 @@ module Test.Main where
 import Prelude
 
 import Effect (Effect)
+import Effect.Class (liftEffect, class MonadEffect)
 import Effect.Class.Console (log)
 import Control.Monad.Error.Class (class MonadThrow)
 import Effect.Exception (Error)
@@ -16,6 +17,8 @@ import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
 
+import Node.Encoding (Encoding(..)) as Encoding
+import Node.FS.Sync (readTextFile)
 
 import Grammar.Parser (parser) as Grammar
 import Grammar.With (parse) as WithGrammar
@@ -25,6 +28,12 @@ import Parsing (Parser, runParser, ParseError(..), Position(..))
 main :: Effect Unit
 main = launchAff_ $ runSpec [consoleReporter] do
   describe "purescript-grammar" do
+    let
+      g = parsesGrammar
+      gfile = parsesGrammarFile
+      pwith = parsesWithGivenGrammarAs
+      gerr = failsToParseWithError
+      perr = mkParseError
 
     describe "parsing grammars (inline)" do
       it "should parse simple grammar (string)" $
@@ -73,6 +82,8 @@ main = launchAff_ $ runSpec [consoleReporter] do
         g "main :- some.\nsome :- .." "main :- some.\nsome :- .."
       it "should parse simple grammar with several rules end empty lines" $
         g "main :- some.\n\nsome :- .." "main :- some.\nsome :- .."
+      it "should parse grammar with escaped characters" $
+        g """string :- ["\"", repSep(stringChar, ""), "\""]""" ""
       pending' "should parse simple grammar with lines before main" $
         g "\n\n\nmain :- \"foo\"." "main :- \"foo\""
       pending' "properly fails when there's no dot in the end of the rule" $
@@ -84,6 +95,9 @@ main = launchAff_ $ runSpec [consoleReporter] do
           """
           "main :- repSep(fo,',').\nfo :- ('f'|'o')."
 
+    describe "grammars from files" $ do
+      it "parses `blocks.grammar`" $
+        gfile "blocks"
     describe "parsing with grammars" do
       pending' "failing to parse" $
         pwith
@@ -153,25 +167,44 @@ main = launchAff_ $ runSpec [consoleReporter] do
           char :- ('a'|'z').
           """
           "( 0 <main> seqnc 0-5 | ( 0 seq:0 char 0-1 ) : ( 0 rule:from choice 1-2 | ( 0 ch:0 char 1-2 ) ) : ( 0 seq:2 char 2-3 ) : ( 0 rule:to choice 3-4 | ( 0 ch:1 char 3-4 ) ) : ( 0 seq:4 char 4-5 ) )"
+      it "plain text grammar works" $
+        pwith "foobar"
+          """main :- repSep(., "")."""
+          "( 0 <main> repsep 0-6 | ( 0 rep any 0-1 ) : ( 0 rep any 1-2 ) : ( 0 rep any 2-3 ) : ( 0 rep any 3-4 ) : ( 0 rep any 4-5 ) : ( 0 rep any 5-6 ) )"
 
 
 
-g ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String → m Unit
-g grammarStr expectation =
+parsesGrammar ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String → m Unit
+parsesGrammar grammarStr expectation =
   (show <$> runParser grammarStr Grammar.parser) `shouldEqual` (Right expectation)
 
 
-gerr ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → ParseError → m Unit
-gerr grammarStr error =
+parsesGrammarFile ∷ ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Error m ⇒ String → m Unit
+parsesGrammarFile fileName = do
+  grammarStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar"
+  expectation <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar.compiled"
+  (show <$> runParser grammarStr Grammar.parser) `shouldEqual` (Right expectation)
+
+
+failsToParseWithError ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → ParseError → m Unit
+failsToParseWithError grammarStr error =
   (show <$> runParser grammarStr Grammar.parser) `shouldEqual` (Left error)
 
 
-perr :: String -> Int -> Int -> Int -> ParseError
-perr err line column index = ParseError err $ Position { line, column, index }
+mkParseError :: String -> Int -> Int -> Int -> ParseError
+mkParseError err line column index = ParseError err $ Position { line, column, index }
 
 
-pwith :: ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String -> String → m Unit
-pwith str grammarStr expectation =
+parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String -> String → m Unit
+parsesWithGivenGrammarAs str grammarStr expectation =
+  let
+    eGrammar = runParser grammarStr Grammar.parser
+    ast grammar = WithGrammar.parse grammar (const 0) str
+  in (map show <$> ast =<< eGrammar) `shouldEqual` (Right expectation)
+
+
+parsesWithGrammarFromFileAs :: ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String -> String → m Unit
+parsesWithGrammarFromFileAs str grammarStr expectation =
   let
     eGrammar = runParser grammarStr Grammar.parser
     ast grammar = WithGrammar.parse grammar (const 0) str

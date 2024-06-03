@@ -78,6 +78,8 @@ parseRule set f match rule =
             pure $ frng res { start : posBefore.index, end : posAfter.index }
 
 
+{-
 _repSep :: forall a sep. P a -> P sep -> P (Array a)
 _repSep _ _ = defer \_ -> do
     pure []
+-}
