@@ -21,7 +21,7 @@ import Node.Encoding (Encoding(..)) as Encoding
 import Node.FS.Sync (readTextFile, writeTextFile)
 
 import Grammar.Parser (parser) as Grammar
-import Grammar.With (parse) as WithGrammar
+import Grammar.Parsing (parse) as WithGrammar
 import Parsing (Parser, runParser, ParseError(..), Position(..))
 
 
@@ -201,6 +201,10 @@ main = launchAff_ $ runSpec [consoleReporter] do
         pwith "\n"
           """main :- "\n"."""
           "( 0 <main> text 0-1 )"
+      it "parsing char ranges" $
+        pwith "234"
+          "main :- [digit,digit,digit].\ndigit :- [0-9]."
+          "( 0 <main> seqnc 0-3 | ( 0 rule:digit char-range 0-1 ) : ( 0 rule:digit char-range 1-2 ) : ( 0 rule:digit char-range 2-3 ) )"
 
 
 

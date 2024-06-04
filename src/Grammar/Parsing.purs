@@ -1,4 +1,4 @@
-module Grammar.With where
+module Grammar.Parsing where
 
 import Prelude
 
@@ -42,7 +42,9 @@ parseRule set f match rule =
                 Just x -> P.fail $ "found " <> show x
                 Nothing -> P.anyChar *> pure unit
         CharRule (Range from to) ->
-            qleaf $ pure unit -- FIXME: TODO
+            qleaf
+                 $  (\ch -> if (ch >= from || ch <= to) then pure ch else P.fail "not from range")
+                <$> P.anyChar
         CharRule Any -> qleaf P.anyChar
         Sequence rules ->
             qnode $ forWithIndex rules $ \idx -> parseRule set f $ InSequence idx
