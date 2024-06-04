@@ -1,1 +1,5 @@
-t = 25
+main {
+    goto end;
+    t = 25;
+    forkTo afterFork;
+}

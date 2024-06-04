@@ -14,6 +14,7 @@ import Data.TraversableWithIndex (forWithIndex)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Array (singleton, fromFoldable) as Array
 import Data.String.CodeUnits (singleton) as String
+import Data.List (List(..)) as List
 
 import Parsing (Parser, ParseError, Position(..), runParser)
 import Parsing (position, fail) as P
@@ -44,8 +45,14 @@ parseRule set f match rule =
                 Nothing -> P.anyChar *> pure unit
         CharRule (Range from to) ->
             qleaf
-                 $  isFromRange from to
-                =<< P.anyChar
+                $ do
+                    ch <- P.lookAhead $ P.anyChar
+                    if (ch >= from) && (ch <= to) then
+                        P.anyChar
+                        -- P.advance $ pure ch -- FIXME
+                    else P.fail $ show ch <> " is not from range " <> String.singleton from <> "-" <> String.singleton to
+                --  $  isFromRange from to
+                -- =<< P.anyChar
         CharRule Any -> qleaf P.anyChar
         Sequence rules ->
             qnode $ forWithIndex rules $ \idx -> parseRule set f $ InSequence idx
@@ -60,7 +67,13 @@ parseRule set f match rule =
                 prep = parseRule set f RepOf rep
                 psep = parseRule set f SepOf sep
             in
-                qnode $ Array.fromFoldable <$> P.sepEndBy prep psep
+                -- qnode $ Array.fromFoldable <$> P.sepEndBy prep psep
+                qnode $ Array.fromFoldable <$> (do
+                    la <- P.optionMaybe $ P.lookAhead prep
+                    case la of
+                        Just _ -> P.sepEndBy prep psep
+                        Nothing -> pure List.Nil
+                    )
         Placeholder ->
             qleaf $ P.string "??"
     where

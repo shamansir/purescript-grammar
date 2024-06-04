@@ -1,17 +1,28 @@
-main :- [[a-z], repSep(alphaNum, ""), " = 25"].
-block :- ["main", ws, blockBody].
-blockBody :- ["{", ws, repSep(instr,';'), ws, "}"].
+main :- repSep(block,ws).
+block :- [label, ws, blockBody].
+blockBody :- ["{", ws, repSep(instr,[";", ws]), ws, "}"].
+label :- ident.
 alpha :- ([a-z] | [A-Z] | "_").
-instr :- [ident, " = 25"].
+instr :- (valueInstr|gotoInstr|forkToInstr).
 num :- [0-9].
 alphaNum :- (alpha | num).
 ident :- [alpha, repSep((alphaNum | "."), "")].
-label :- ident.
 ws :- repSep([spaces, (comment | "")], "\n").
 spaces :- repSep(" ", "").
 comment :- ["//", repSep(commentChar, "")].
 commentChar :- ^'\n'.
 valueInstr :- [([ident, ws, "=", ws] | ""), rvalue].
-rvalue :- (call | const).
+rvalue :- const.
+# rvalue :- (call | const).
+call :- [ident, (params | "")].
 const :- int.
 int :- [[0-9], repSep([0-9], "")].
+gotoInstr :- [gotoKW, ws, (label | Placeholder), ([ws, ifClause] | "")].
+gotoKW :- "goto".
+ifKW :- "if".
+Placeholder :- "???".
+ifClause :- [ifKW, ws, ident].
+forkToInstr :- [forkToKW, ws, label].
+forkToKW :- "forkTo".
+params :- ["(", repSep((ident | Placeholder), [",", ws]), ")"].
+Placeholder :- "???".

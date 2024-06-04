@@ -37,7 +37,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       withgrmfile = parsesWithGrammarFromFile
       mkerr = mkParseError
 
-    describe "parsing grammars (inline)" do
+    describe "parsing grammars (inline)" $ do
       it "should parse simple grammar (string)" $
         grm "main :- \"foobar\".\n" "main :- \"foobar\".\n"
       it "should parse simple grammar (char)" $
@@ -133,7 +133,8 @@ main = launchAff_ $ runSpec [consoleReporter] do
       pending' "parses `test`" $
         grmfile "test"
 
-    describe "parsing with grammars" do
+    describe "parsing with grammars" $ do
+
       pending' "failing to parse" $
         withgrm
           "?"
@@ -220,6 +221,14 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm ""
           """main :- repSep("a","")."""
           "( 0 <main> repsep 0-0 | ∅ )"
+      it "parsing rep/sep with single element" $
+        withgrm "2"
+          """main :- repSep("2","")."""
+          "( 0 <main> repsep 0-1 | ( 0 rep text 0-1 ) )"
+      it "parsing rep/sep with single element as char sequence" $
+        withgrm "2"
+          """main :- repSep([0-9],"")."""
+          "( 0 <main> repsep 0-1 | ( 0 rep char-range 0-1 ) )"
       it "capture works" $
         withgrm "[a-z]"
           """main :- ['[',from:char,'-',to:char,']'].
@@ -245,15 +254,49 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "num is not parsed as alpha" $
         withgrmfail "2"
           "main :- [a-z]."
-          $ mkerr "'2' is not from range a-z" 1 2 1
+          $ mkerr "'2' is not from range a-z" 1 1 0
       it "parsing char ranges in sequences" $
         withgrm "2"
           "main :- [[0-9]]."
           "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) )"
       it "parsing char ranges in sequences 2" $
         withgrm "2"
-          "main :- [[0-9],repSep([0-9], '')]."
-          ""
+          """main :- [[0-9],repSep(" ","")]."""
+          "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | ∅ ) )"
+      it "parsing empty rep/seps" $
+        withgrm "2"
+          """main :- [[0-9],repSep([0-9],"")]."""
+          "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | ∅ ) )"
+      it "parsing empty rep/seps 2" $
+        withgrm "2a"
+          """main :- [[0-9],repSep(" ",""),'a']."""
+          "( 0 <main> seqnc 0-2 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | ∅ ) : ( 0 seq:2 char 1-2 ) )"
+      it "parsing empty rep/seps 3" $
+        withgrm "t = 25"
+          """main :- [[a-z], repSep([a-z], ""), " = 25"]."""
+          "( 0 <main> seqnc 0-6 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | ∅ ) : ( 0 seq:2 text 1-6 ) )"
+
+      let
+        identifierGrammar =
+          """main :- ident.
+             alpha :- ([a-z] | [A-Z] | "_").
+             num :- [0-9].
+             alphaNum :- (alpha | num).
+             ident :- [alpha, repSep((alphaNum | "."), "")]."""
+
+      it "parsing identifier rule" $
+        withgrm "t"
+          identifierGrammar
+          "( 0 rule:ident seqnc 0-1 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-1 | ∅ ) )"
+      it "parsing identifier rule 2" $
+        withgrm "t0"
+          identifierGrammar
+          "( 0 rule:ident seqnc 0-2 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-2 | ( 0 rep choice 1-2 | ( 0 rule:alphaNum choice 1-2 | ( 0 rule:num char-range 1-2 ) ) ) ) )"
+      it "parsing identifier rule 3" $
+        withgrm "t0 "
+          identifierGrammar
+          "( 0 rule:ident seqnc 0-2 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-2 | ( 0 rep choice 1-2 | ( 0 rule:alphaNum choice 1-2 | ( 0 rule:num char-range 1-2 ) ) ) ) )"
+
       it "parses `blocks`" $
         withgrmfile "blocks"
       it "parses `grammar`" $
