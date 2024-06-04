@@ -17,7 +17,7 @@ import Control.Lazy (defer)
 import Data.String (joinWith) as String
 import Control.Alt ((<|>))
 
-import Grammar (Grammar, CharX(..))
+import Grammar (Grammar, CharX(..), toChar)
 import Grammar as Grammar
 
 import Parsing (Parser)
@@ -227,11 +227,7 @@ _loadChar = case _ of
 
 
 _buildString :: Array CharX -> String
-_buildString = map convertChar >>> String.joinWith ""
-    where
-        convertChar = case _ of
-            Escaped ch -> "\\" <> String.singleton ch
-            Raw ch -> String.singleton ch
+_buildString = map toChar >>> String.fromCharArray
 
 
 _textChar :: Char -> Char -> P CharX

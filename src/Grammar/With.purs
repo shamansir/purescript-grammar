@@ -3,7 +3,7 @@ module Grammar.With where
 import Prelude
 
 import Grammar (Grammar, AST(..), Rule(..), CharRule(..), MatchAt(..), CharX(..), RuleName, RuleSet, Range)
-import Grammar (main, find, findIn, set) as G
+import Grammar (main, find, findIn, set, toChar) as G
 
 import Control.Lazy (defer)
 
@@ -35,13 +35,9 @@ parseRule :: forall a. RuleSet -> (Rule -> a) -> MatchAt -> Rule -> P (AST a)
 parseRule set f match rule =
     case rule of
         Text text -> qleaf $ P.string text
-        CharRule (Single chx) -> qleaf $ P.char $ case chx of
-            Escaped ch -> ch
-            Raw ch -> ch
+        CharRule (Single chx) -> qleaf $ P.char $ G.toChar chx
         CharRule (Not chx) -> qleaf $ do
-            mbExclude <- P.optionMaybe $ P.try $ P.char $ case chx of
-                Escaped ch -> ch
-                Raw ch -> ch
+            mbExclude <- P.optionMaybe $ P.try $ P.char $ G.toChar chx
             case mbExclude of
                 Just x -> P.fail $ "found " <> show x
                 Nothing -> P.anyChar *> pure unit

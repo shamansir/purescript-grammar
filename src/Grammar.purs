@@ -99,6 +99,20 @@ findIn :: RuleSet -> RuleName -> Maybe Rule
 findIn = flip Map.lookup
 
 
+toChar :: CharX -> Char
+toChar (Raw ch) = ch
+toChar (Escaped ch) =
+    case ch of
+        'n' -> '\n'
+        'r' -> '\r'
+        't' -> '\t'
+        'x' -> '\x'
+        '\\' -> '\\'
+        '"' -> '\"'
+        -- ''' -> '''
+        other -> other
+
+
 instance Show CharRule where
     show = case _ of
         Range chA chB -> "[" <> String.singleton chA <> "-" <> String.singleton chB <> "]"
@@ -118,7 +132,7 @@ instance Show Rule where
             case mbCapture of
                 Just captureName -> captureName <> ":" <> ruleName
                 Nothing -> ruleName
-        Text text -> "\"" <> text <> "\""
+        Text text -> show text
         CharRule chrule -> show chrule
         RepSep repRule sepRule ->
             -- TODO: Some operator for RepSep

@@ -193,6 +193,14 @@ main = launchAff_ $ runSpec [consoleReporter] do
         pwith "foobar"
           """main :- repSep(., "")."""
           "( 0 <main> repsep 0-6 | ( 0 rep any 0-1 ) : ( 0 rep any 1-2 ) : ( 0 rep any 2-3 ) : ( 0 rep any 3-4 ) : ( 0 rep any 4-5 ) : ( 0 rep any 5-6 ) )"
+      it "parsing newlines (as chars)" $
+        pwith "\n"
+          """main :- '\n'."""
+          "( 0 <main> char 0-1 )"
+      it "parsing newlines (as strings)" $
+        pwith "\n"
+          """main :- "\n"."""
+          "( 0 <main> text 0-1 )"
 
 
 
