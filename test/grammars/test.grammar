@@ -1,0 +1,17 @@
+main :- [[a-z], repSep(alphaNum, ""), " = 25"].
+block :- ["main", ws, blockBody].
+blockBody :- ["{", ws, repSep(instr,';'), ws, "}"].
+alpha :- ([a-z] | [A-Z] | "_").
+instr :- [ident, " = 25"].
+num :- [0-9].
+alphaNum :- (alpha | num).
+ident :- [alpha, repSep((alphaNum | "."), "")].
+label :- ident.
+ws :- repSep([spaces, (comment | "")], "\n").
+spaces :- repSep(" ", "").
+comment :- ["//", repSep(commentChar, "")].
+commentChar :- ^'\n'.
+valueInstr :- [([ident, ws, "=", ws] | ""), rvalue].
+rvalue :- (call | const).
+const :- int.
+int :- [[0-9], repSep([0-9], "")].

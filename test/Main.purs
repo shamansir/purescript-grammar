@@ -33,6 +33,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       grmfile = parsesGrammarFile
       grmfail = failsToParseGrammarWithError
       withgrm = parsesWithGivenGrammarAs
+      withgrmfail = failsToParseWithGivenGrammarWithError
       withgrmfile = parsesWithGrammarFromFile
       mkerr = mkParseError
 
@@ -129,6 +130,8 @@ main = launchAff_ $ runSpec [consoleReporter] do
         grmfile "plainText"
       it "parses `json.grammar`" $
         grmfile "json"
+      pending' "parses `test`" $
+        grmfile "test"
 
     describe "parsing with grammars" do
       pending' "failing to parse" $
@@ -201,13 +204,21 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm "\n"
           """main :- repSep(" ","\n")."""
           "( 0 <main> repsep 0-0 | ∅ )"
-      -- it "parsing rep/sep when empty 3" $
-      --   withgrm ""
-      --     """main :- repSep("","")."""
-      --     "( 0 <main> repsep 0-0 | ∅)"
+      {- pending' "parsing rep/sep when empty 3" $
+        withgrm ""
+          """main :- repSep("","")."""
+          "( 0 <main> repsep 0-0 | ∅)" -}
       it "parsing rep/sep when empty 4" $
         withgrm ""
           """main :- repSep("a","b")."""
+          "( 0 <main> repsep 0-0 | ∅ )"
+      it "parsing rep/sep when empty 5" $
+        withgrm ""
+          """main :- repSep("a","")."""
+          "( 0 <main> repsep 0-0 | ∅ )"
+      it "parsing rep/sep when empty 6" $
+        withgrm ""
+          """main :- repSep("a","")."""
           "( 0 <main> repsep 0-0 | ∅ )"
       it "capture works" $
         withgrm "[a-z]"
@@ -231,6 +242,18 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm "234"
           "main :- [digit,digit,digit].\ndigit :- [0-9]."
           "( 0 <main> seqnc 0-3 | ( 0 rule:digit char-range 0-1 ) : ( 0 rule:digit char-range 1-2 ) : ( 0 rule:digit char-range 2-3 ) )"
+      it "num is not parsed as alpha" $
+        withgrmfail "2"
+          "main :- [a-z]."
+          $ mkerr "'2' is not from range a-z" 1 2 1
+      it "parsing char ranges in sequences" $
+        withgrm "2"
+          "main :- [[0-9]]."
+          "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) )"
+      it "parsing char ranges in sequences 2" $
+        withgrm "2"
+          "main :- [[0-9],repSep([0-9], '')]."
+          ""
       it "parses `blocks`" $
         withgrmfile "blocks"
       it "parses `grammar`" $
@@ -241,6 +264,8 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrmfile "plainText"
       it "parses `fp`" $
         withgrmfile "fp"
+      it "parses `test`" $
+        withgrmfile "test"
 
 
 
@@ -273,6 +298,14 @@ parsesWithGivenGrammarAs str grammarStr expectation =
     eGrammar = runParser grammarStr Grammar.parser
     buildAst grammar = WithGrammar.parse grammar (const 0) str
   in (map show <$> buildAst =<< eGrammar) `shouldEqual` (Right expectation)
+
+
+failsToParseWithGivenGrammarWithError ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String -> String → ParseError → m Unit
+failsToParseWithGivenGrammarWithError str grammarStr error =
+  let
+    eGrammar = runParser grammarStr Grammar.parser
+    buildAst grammar = WithGrammar.parse grammar (const 0) str
+  in (map show <$> buildAst =<< eGrammar) `shouldEqual` (Left error)
 
 
 parsesWithGrammarFromFile :: ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Error m => String -> m Unit

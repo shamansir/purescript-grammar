@@ -13,6 +13,7 @@ import Data.Traversable (for)
 import Data.TraversableWithIndex (forWithIndex)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Array (singleton, fromFoldable) as Array
+import Data.String.CodeUnits (singleton) as String
 
 import Parsing (Parser, ParseError, Position(..), runParser)
 import Parsing (position, fail) as P
@@ -43,8 +44,8 @@ parseRule set f match rule =
                 Nothing -> P.anyChar *> pure unit
         CharRule (Range from to) ->
             qleaf
-                 $  (\ch -> if (ch >= from || ch <= to) then pure ch else P.fail "not from range")
-                <$> P.anyChar
+                 $  isFromRange from to
+                =<< P.anyChar
         CharRule Any -> qleaf P.anyChar
         Sequence rules ->
             qnode $ forWithIndex rules $ \idx -> parseRule set f $ InSequence idx
@@ -59,7 +60,7 @@ parseRule set f match rule =
                 prep = parseRule set f RepOf rep
                 psep = parseRule set f SepOf sep
             in
-                qnode $ Array.fromFoldable <$> P.sepBy prep psep
+                qnode $ Array.fromFoldable <$> P.sepEndBy prep psep
         Placeholder ->
             qleaf $ P.string "??"
     where
@@ -77,6 +78,12 @@ parseRule set f match rule =
             res <- p
             (Position posAfter) <- P.position
             pure $ frng res { start : posBefore.index, end : posAfter.index }
+        isFromRange :: Char -> Char -> Char -> P Char
+        isFromRange from to ch =
+            if (ch >= from) && (ch <= to)
+                then pure ch
+                else P.fail $ show ch <> " is not from range " <> String.singleton from <> "-" <> String.singleton to
+
 
 
 {-
