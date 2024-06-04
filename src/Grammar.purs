@@ -101,7 +101,7 @@ findIn = flip Map.lookup
 
 instance Show CharRule where
     show = case _ of
-        Range chA chB -> "[" <> show chA <> "-" <> show chB <> "]"
+        Range chA chB -> "[" <> String.singleton chA <> "-" <> String.singleton chB <> "]"
         Not char -> "^" <> show (Single char)
         Single char ->
             "'" <> (case char of

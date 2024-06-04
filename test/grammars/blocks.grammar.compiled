@@ -1,6 +1,6 @@
 main :- repSep(block,ws).
 Placeholder :- "???".
-alpha :- (['a'-'z']|['A'-'Z']|"_").
+alpha :- ([a-z]|[A-Z]|"_").
 alphaNum :- (alpha|num).
 block :- [label,ws,blockBody].
 blockBody :- ["{",ws,repSep(instr,[";",ws]),ws,"}"].
@@ -17,9 +17,9 @@ ident :- [alpha,repSep((alphaNum|"."),"")].
 ifClause :- [ifKW,ws,ident].
 ifKW :- "if".
 instr :- (valueInstr|gotoInstr|forkToInstr).
-int :- [['0'-'9'],repSep(['0'-'9'],"")].
+int :- [[0-9],repSep([0-9],"")].
 label :- ident.
-num :- ['0'-'9'].
+num :- [0-9].
 params :- ["(",repSep((ident|Placeholder),[",",ws]),")"].
 rvalue :- (call|const).
 spaces :- repSep(" ","").

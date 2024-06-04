@@ -43,9 +43,9 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "should parse simple grammar (not char)" $
         g "main :- ^'x'.\n" "main :- ^'x'.\n"
       it "should parse simple grammar (range)" $
-        g "main :- [a-z]." "main :- ['a'-'z'].\n"
+        g "main :- [a-z]." "main :- [a-z].\n"
       it "should parse simple grammar (range 2)" $
-        g "main :- [0-9]." "main :- ['0'-'9'].\n"
+        g "main :- [0-9]." "main :- [0-9].\n"
       it "should parse simple grammar (repsep)" $
         g "main :- repSep(., '?')." "main :- repSep(.,'?').\n"
       it "should parse simple grammar (repsep 2)" $
