@@ -18,7 +18,7 @@ import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
 
 import Node.Encoding (Encoding(..)) as Encoding
-import Node.FS.Sync (readTextFile)
+import Node.FS.Sync (readTextFile, writeTextFile)
 
 import Grammar.Parser (parser) as Grammar
 import Grammar.With (parse) as WithGrammar
@@ -85,7 +85,11 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "should parse grammar with escaped characters in chars" $
         g
           "main :- '\n'."
-          "main :- '\\n'.\n"
+          "main :- '\n'.\n"
+      it "should parse grammar with escaped characters in negated chars" $
+        g
+          "main :- ^'\n'."
+          "main :- ^'\n'.\n"
       it "should parse grammar with escaped quote in chars" $
         g
           """char :- '\''."""
@@ -201,7 +205,11 @@ parsesGrammarFile ∷ ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Erro
 parsesGrammarFile fileName = do
   grammarStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar"
   expectation <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar.compiled"
-  (show <$> runParser grammarStr Grammar.parser) `shouldEqual` (Right expectation)
+  let result =  runParser grammarStr Grammar.parser
+  liftEffect $ writeTextFile Encoding.UTF8 ("./test/grammars/" <> fileName <> ".grammar.result") $ case result of
+    Left error -> "error::" <> show error
+    Right grammar -> show grammar
+  (show <$> result) `shouldEqual` (Right expectation)
 
 
 failsToParseWithError ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → ParseError → m Unit

@@ -10,3 +10,4 @@
 /.spago
 Frisby.hs
 tmp
+/test/grammars/*.grammar.result

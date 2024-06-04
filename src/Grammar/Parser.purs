@@ -17,7 +17,7 @@ import Control.Lazy (defer)
 import Data.String (joinWith) as String
 import Control.Alt ((<|>))
 
-import Grammar (Grammar)
+import Grammar (Grammar, CharX(..))
 import Grammar as Grammar
 
 import Parsing (Parser)
@@ -212,27 +212,21 @@ _ident =
     <$> (PA.many1 P.alphaNum <?> "expected identifier")
 
 
-_char :: P Char
+_char :: P CharX
 _char =
-    _loadChar <$>
     P.between
         (P.char '\'')
         (P.char '\'')
         (_textChar ''' '\\')
 
 
-data EscapedOrRaw
-    = Escaped Char
-    | Raw Char
-
-
-_loadChar :: EscapedOrRaw -> Char
+_loadChar :: CharX -> Char
 _loadChar = case _ of
     Escaped ch -> ch
     Raw ch -> ch
 
 
-_buildString :: Array EscapedOrRaw -> String
+_buildString :: Array CharX -> String
 _buildString = map convertChar >>> String.joinWith ""
     where
         convertChar = case _ of
@@ -240,7 +234,7 @@ _buildString = map convertChar >>> String.joinWith ""
             Raw ch -> String.singleton ch
 
 
-_textChar :: Char -> Char -> P EscapedOrRaw
+_textChar :: Char -> Char -> P CharX
 _textChar terminate escape = do
     x <- P.lookAhead P.anyChar
     if x == terminate then

@@ -6,6 +6,7 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Map (Map)
 import Data.Map (empty, lookup, toUnfoldable) as Map
 import Data.String (joinWith) as String
+import Data.String.CodeUnits (singleton) as String
 import Data.Tuple (Tuple(..))
 import Data.Tuple (uncurry) as Tuple
 
@@ -16,13 +17,6 @@ type RuleSet = Map RuleName Rule
 data Grammar = Grammar Rule RuleSet
 
 
-data CharRule
-    = Range Char Char
-    | Not Char
-    | Single Char
-    | Any
-
-
 data Rule
     = Sequence (Array Rule)
     | Choice (Array Rule)
@@ -31,6 +25,18 @@ data Rule
     | CharRule CharRule
     | RepSep Rule Rule
     | Placeholder
+
+
+data CharRule
+    = Range Char Char
+    | Not CharX
+    | Single CharX
+    | Any
+
+
+data CharX
+    = Escaped Char
+    | Raw Char
 
 
 type RuleName = String
@@ -65,7 +71,6 @@ data AST a
     | Node Match a (Array (AST a))
 
 
-
 data Failure = Failure Range
 
 
@@ -97,8 +102,11 @@ findIn = flip Map.lookup
 instance Show CharRule where
     show = case _ of
         Range chA chB -> "[" <> show chA <> "-" <> show chB <> "]"
-        Not char -> "^" <> show char -- "^'" <> show char <> "'"
-        Single char -> show char -- "'" <> show char <> "'"
+        Not char -> "^" <> show (Single char)
+        Single char ->
+            "'" <> (case char of
+                        Escaped ch -> "\\" <> String.singleton ch
+                        Raw ch -> String.singleton ch) <> "'"
         Any -> "."
 
 
