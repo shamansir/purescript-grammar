@@ -1,0 +1,26 @@
+main :- repSep(stmt,ws).
+alpha :- ([a-z]|[A-Z]|"_").
+alphaNum :- (alpha|num).
+commaWS :- [",",ws].
+contractKW :- "contract".
+contractStmt :- [contractKW,funcArgs].
+expr :- (funcCall|lambda|varExpr|stringLit|intLit|placeholder).
+funcArg :- [([ident,":"]|""),expr].
+funcArgs :- ["(",ws,repSep(funcArg,commaWS),ws,")"].
+funcCall :- [varExpr,funcArgs].
+ident :- [alpha,repSep((alphaNum|"."),"")].
+intLit :- [num,repSep(num,"")].
+lambda :- ["(",lambdaParam,")",ws,":",ws,type,ws,"=>",ws,expr].
+lambdaParam :- [ident,ws,":",ws,type].
+num :- [0-9].
+parenExpr :- ["(",expr,")"].
+paymentKW :- "payment".
+paymentStmt :- [paymentKW,funcArgs].
+placeholder :- "???".
+stmt :- [(contractStmt|paymentStmt),"."].
+stringChar :- (^'"'|['\\','"']).
+stringContents :- repSep(stringChar,"").
+stringLit :- ["\"",stringContents,"\""].
+type :- ident.
+varExpr :- ident.
+ws :- repSep((" "|"\n"),"").

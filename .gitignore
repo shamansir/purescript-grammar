@@ -11,3 +11,4 @@
 Frisby.hs
 tmp
 /test/grammars/*.grammar.result
+/test/sources/*.src.result

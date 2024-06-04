@@ -59,8 +59,7 @@ parseRule set f match rule =
                 prep = parseRule set f RepOf rep
                 psep = parseRule set f SepOf sep
             in
-                qnode $ Array.fromFoldable <$> P.sepBy1 prep psep
-                -- qnode $ _repSep prep psep
+                qnode $ Array.fromFoldable <$> P.sepBy prep psep
         Placeholder ->
             qleaf $ P.string "??"
     where

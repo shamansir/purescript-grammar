@@ -1,0 +1,20 @@
+main :- expr.
+alpha :- ([a-z]|[A-Z]|"_").
+alphaNum :- (alpha|num).
+expr :- (funcCall|lambda|letExpr|varExpr|stringLit|intLit|placeholder).
+funcCall :- [varExpr,"(",expr,")"].
+ident :- [alpha,repSep((alphaNum|"."),"")].
+inKW :- "in".
+intLit :- [num,repSep(num,"")].
+lambda :- ["(",lambdaParam,")",ws,":",ws,type,ws,"=>",ws,expr].
+lambdaParam :- [ident,ws,":",ws,type].
+letExpr :- [letKW,ws,ident,ws,"=",ws,expr,ws,inKW,ws,expr].
+letKW :- "let".
+num :- [0-9].
+parenExpr :- ["(",expr,")"].
+placeholder :- "???".
+stringChar :- (^'"'|['\\','"']).
+stringLit :- ["\"",repSep(stringChar,""),"\""].
+type :- ident.
+varExpr :- ident.
+ws :- repSep((" "|"\n"),"").
