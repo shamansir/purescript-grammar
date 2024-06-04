@@ -2,6 +2,8 @@ module Grammar.Parser where
 
 import Prelude
 
+import Debug as Debug
+
 import Data.Tuple (uncurry, fst) as Tuple
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.String.CodeUnits as String
@@ -12,6 +14,8 @@ import Data.List.NonEmpty as NEL
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Map as Map
 import Control.Lazy (defer)
+import Data.String (joinWith) as String
+import Control.Alt ((<|>))
 
 import Grammar (Grammar)
 import Grammar as Grammar
@@ -58,7 +62,7 @@ ruleLine = do --defer \_ -> do
     ws
     _ <- P.string ":-"
     ws
-    theRule <- rule
+    theRule <- rule <?> "expected rule"
     ws
     _ <- P.char '.'
     ws
@@ -122,12 +126,11 @@ ref = defer \_ -> do
 text :: P Grammar.Rule
 text = defer \_ ->
     Grammar.Text <$>
-    String.fromCharArray <$>
-    -- NEA.toUnfoldable <$>
+    _buildString <$>
     P.between
         (P.char '"')
         (P.char '"')
-        (PA.many $ _notBut (P.char '"') P.anyChar)
+        (PA.many $ _textChar '"' '\\')
 
 
 char :: P Grammar.Rule
@@ -211,10 +214,41 @@ _ident =
 
 _char :: P Char
 _char =
+    _loadChar <$>
     P.between
         (P.char '\'')
         (P.char '\'')
-        (P.anyChar)
+        (_textChar ''' '\\')
+
+
+data EscapedOrRaw
+    = Escaped Char
+    | Raw Char
+
+
+_loadChar :: EscapedOrRaw -> Char
+_loadChar = case _ of
+    Escaped ch -> ch
+    Raw ch -> ch
+
+
+_buildString :: Array EscapedOrRaw -> String
+_buildString = map convertChar >>> String.joinWith ""
+    where
+        convertChar = case _ of
+            Escaped ch -> "\\" <> String.singleton ch
+            Raw ch -> String.singleton ch
+
+
+_textChar :: Char -> Char -> P EscapedOrRaw
+_textChar terminate escape = do
+    x <- P.lookAhead P.anyChar
+    if x == terminate then
+        P.fail $ "found " <> show x
+    else if x == escape then
+        P.anyChar *> P.anyChar <#> Escaped
+    else
+        P.anyChar <#> Raw
 
 
 _notBut :: forall a x. Show x => P x -> P a -> P a

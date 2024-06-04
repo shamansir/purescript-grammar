@@ -82,8 +82,26 @@ main = launchAff_ $ runSpec [consoleReporter] do
         g "main :- some.\nsome :- .." "main :- some.\nsome :- .."
       it "should parse simple grammar with several rules end empty lines" $
         g "main :- some.\n\nsome :- .." "main :- some.\nsome :- .."
-      it "should parse grammar with escaped characters" $
-        g """string :- ["\"", repSep(stringChar, ""), "\""]""" ""
+      it "should parse grammar with escaped characters in chars" $
+        g
+          "main :- '\n'."
+          "main :- '\\n'.\n"
+      it "should parse grammar with escaped quote in chars" $
+        g
+          """char :- '\''."""
+          "main :- ???.\nchar :- '\\''."
+      it "should parse grammar with escaped characters in strings" $
+        g
+          "main :- \"'\"."
+          "main :- \"'\".\n"
+      it "should parse grammar with escaped quote in strings" $
+        g
+          """string :- "\""."""
+          "main :- ???.\nstring :- \"\\\"\"."
+      it "should parse complex grammar with escaped quote in strings" $
+        g
+          """string :- ["\"", repSep(stringChar, ""), "\""]."""
+          "main :- ???.\nstring :- [\"\\\"\",repSep(stringChar,\"\"),\"\\\"\"]."
       pending' "should parse simple grammar with lines before main" $
         g "\n\n\nmain :- \"foo\"." "main :- \"foo\""
       pending' "properly fails when there's no dot in the end of the rule" $

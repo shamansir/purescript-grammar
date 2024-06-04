@@ -5,9 +5,9 @@ alphaNum :- (alpha|num).
 block :- [label,ws,blockBody].
 blockBody :- ["{",ws,repSep(instr,[";",ws]),ws,"}"].
 call :- [ident,(params|"")].
-const :- (string|int|editorVar).
 comment :- ["//",repSep(commentChar,"")].
 commentChar :- ^'\n'.
+const :- (string|int|editorVar).
 editorVar :- ["<<",int,">>"].
 forkToInstr :- [forkToKW,ws,label].
 forkToKW :- "forkTo".
