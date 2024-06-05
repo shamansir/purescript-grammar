@@ -2,7 +2,7 @@ module Grammar.Parsing where
 
 import Prelude
 
-import Grammar (Grammar, AST(..), Rule(..), CharRule(..), MatchAt(..), CharX(..), RuleName, RuleSet, Range)
+import Grammar (Grammar, AST(..), Rule(..), CharRule(..), At(..), CharX(..), RuleName, RuleSet, Range)
 import Grammar (main, find, findIn, set, toChar) as G
 
 import Control.Lazy (defer)
@@ -38,8 +38,8 @@ parse grammar f str =
     flip runParser str $ parseRule (G.set grammar) f Main $ G.main grammar
 
 
-parseRule :: forall a. RuleSet -> (Rule -> a) -> MatchAt -> Rule -> P (AST a)
-parseRule set f match rule =
+parseRule :: forall a. RuleSet -> (Rule -> a) -> At -> Rule -> P (AST a)
+parseRule set f at rule =
     case rule of
         Text text -> qleaf $ P.string text
         CharRule (Single chx) -> qleaf $ P.char $ G.toChar chx
@@ -75,7 +75,7 @@ parseRule set f match rule =
             qnode $ Array.singleton <$> (P.choice $ map P.try $ mapWithIndex (\idx -> parseRule set f $ ChoiceOf idx) rules)
         Ref mbCapture ruleName ->
             case G.findIn set ruleName of
-                Just rule -> parseRule set f (AtRule $ mbCapture # fromMaybe ruleName) rule
+                Just rule -> parseRule set f (At $ mbCapture # fromMaybe ruleName) rule
                 Nothing -> P.fail $ "Rule " <> ruleName <> " was not found in grammar"
         RepSep rep sep ->
             let
@@ -97,9 +97,9 @@ parseRule set f match rule =
         qnode :: P (Array (AST a)) -> P (AST a)
         qnode = withRange node
         leaf :: forall x. x -> Range -> AST a
-        leaf _ range = Leaf { match, rule, range } $ f rule
+        leaf _ range = Leaf { at, rule, range } $ f rule
         node :: Array (AST a) -> Range -> AST a
-        node rules range = Node { match, rule, range } (f rule) rules
+        node rules range = Node { at, rule, range } (f rule) rules
         withRange :: forall c z. (c -> Range -> z) -> P c -> P z
         withRange frng p = do
             posBefore <- _position

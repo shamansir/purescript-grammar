@@ -45,13 +45,12 @@ type RuleName = String
 type CaptureName = String
 
 
-
 type Range = { start :: Int, end :: Int }
 
 
-data MatchAt
+data At
     = Main
-    | AtRule RuleName
+    | At RuleName
     | InSequence Int
     | ChoiceOf Int
     | RepOf
@@ -60,19 +59,24 @@ data MatchAt
 
 type Match =
     { range :: Range -- in
-    , match :: MatchAt -- parent
+    , at :: At -- parent
     , rule :: Rule
+    }
+
+
+type Failure =
+    { position :: Int
+    , at :: At
+    , rule :: Rule
+    , error :: String
     }
 
 
 data AST a
     = Nil
+    | Fail Failure
     | Leaf Match a
     | Node Match a (Array (AST a))
-
-
-data Failure = Failure Range
-
 
 
 empty :: Grammar
@@ -148,10 +152,10 @@ instance Show Grammar where
                 name <> " :- " <> show rule <> "."
 
 
-instance Show MatchAt where
+instance Show At where
     show = case _ of
         Main -> "<main>"
-        AtRule ruleName -> "rule:" <> ruleName
+        At ruleName -> "rule:" <> ruleName
         InSequence idx -> "seq:" <> show idx
         ChoiceOf idx -> "ch:" <> show idx
         RepOf -> "rep"
@@ -168,9 +172,10 @@ instance Show a => Show (AST a) where
             "( " <> show a <> " " <> smatch match <> " | " <> String.joinWith " : " (show <$> children) <> " )"
         Leaf match a ->
             "( " <> show a <> " " <> smatch match <> " )"
+        Fail failure ->
+            "< " <> sfailure failure <> " >"
         where
-            smatch { match, range, rule } =
-                show match <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end
+
             ruleType = case _ of
                 Sequence _ -> "seqnc"
                 Choice _ -> "choice"
@@ -183,3 +188,7 @@ instance Show a => Show (AST a) where
                     Range _ _ -> "char-range"
                 RepSep _ _ -> "repsep"
                 Placeholder -> "-"
+            smatch { at, range, rule } =
+                show at <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end
+            sfailure { error, at, rule, position } =
+                "< " <> show error <> " :: " <> show at <> " " <> ruleType rule <> " @ " <> show position <> " >"
