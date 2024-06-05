@@ -25,7 +25,7 @@ import Grammar (Grammar, AST)
 import Grammar.Parser (parser) as Grammar
 import Grammar.Parsing (parse) as WithGrammar
 
-import Parsing (Parser, runParser, ParseError(..), Position(..)) as P
+-- import Parsing (Parser, runParser, ParseError(..), Position(..)) as P
 import StringParser (Parser, runParser, ParseError(..), PosString) as SP
 
 
@@ -39,7 +39,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       withgrm = parsesWithGivenGrammarAs
       withgrmfail = failsToParseWithGivenGrammarWithError
       withgrmfile = parsesWithGrammarFromFile
-      mkerr = mkParseError
+      mkerr = mkSParseError
       mkserr = mkSParseError
 
     describe "parsing grammars (inline)" $ do
@@ -116,7 +116,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       pending' "should parse simple grammar with lines before main" $
         grm "\n\n\nmain :- \"foo\"." "main :- \"foo\""
       pending' "properly fails when there's no dot in the end of the rule" $
-        grmfail "main :- some" $ mkerr "no dot in the end of the rule" 1 1 0
+        grmfail "main :- some" $ mkerr "no dot in the end of the rule" 1
       it "collects all rules" $
         grm
           """main :- repSep(fo,',').
@@ -342,25 +342,21 @@ main = launchAff_ $ runSpec [consoleReporter] do
 
 parsesGrammar ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String → m Unit
 parsesGrammar grammarStr expectation =
-  (show <$> P.runParser grammarStr Grammar.parser) `shouldEqual` (Right expectation)
+  (show <$> SP.runParser Grammar.parser grammarStr) `shouldEqual` (Right expectation)
 
 
 parsesGrammarFile ∷ ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Error m ⇒ String → m Unit
 parsesGrammarFile fileName = do
   grammarStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar"
   expectation <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar.expected"
-  let eGrammar =  P.runParser grammarStr Grammar.parser
+  let eGrammar =  SP.runParser Grammar.parser grammarStr
   liftEffect $ writeTextFile Encoding.UTF8 ("./test/grammars/" <> fileName <> ".grammar.result") $ reportE eGrammar
   (show <$> eGrammar) `shouldEqual` (Right expectation)
 
 
-failsToParseGrammarWithError ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → P.ParseError → m Unit
+failsToParseGrammarWithError ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → SP.ParseError → m Unit
 failsToParseGrammarWithError grammarStr error =
-  (show <$> P.runParser grammarStr Grammar.parser) `shouldEqual` (Left error)
-
-
-mkParseError :: String -> Int -> Int -> Int -> P.ParseError
-mkParseError err line column index = P.ParseError err $ P.Position { line, column, index }
+  (show <$> SP.runParser Grammar.parser grammarStr) `shouldEqual` (Left error)
 
 
 mkSParseError :: String -> Int -> SP.ParseError
@@ -370,18 +366,18 @@ mkSParseError error pos = { error, pos }
 parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String -> String → m Unit
 parsesWithGivenGrammarAs str grammarStr expectation =
   let
-    eGrammar = P.runParser grammarStr Grammar.parser
+    eGrammar = SP.runParser Grammar.parser grammarStr
     buildAst grammar = WithGrammar.parse grammar (const 0) str
-  in (map show <$> buildAst =<< lmap convertError eGrammar) `shouldEqual` (Right expectation)
+  in (map show <$> buildAst =<< eGrammar) `shouldEqual` (Right expectation)
 
 
 failsToParseWithGivenGrammarWithError ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String -> String → SP.ParseError → m Unit
 failsToParseWithGivenGrammarWithError str grammarStr error =
   let
-    eGrammar = P.runParser grammarStr Grammar.parser
+    eGrammar = SP.runParser Grammar.parser grammarStr
     buildAst :: Grammar -> Either SP.ParseError (AST Int)
     buildAst grammar = WithGrammar.parse grammar (const 0) str
-  in (map show <$> buildAst =<< lmap convertError eGrammar) `shouldEqual` (Left error)
+  in (map show <$> buildAst =<< eGrammar) `shouldEqual` (Left error)
 
 
 parsesWithGrammarFromFile :: ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Error m => String -> m Unit
@@ -390,16 +386,12 @@ parsesWithGrammarFromFile fileName = do
     sourceStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/sources/" <> fileName <> ".src"
     expectationStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/sources/" <> fileName <> ".src.expected"
     let
-      eGrammar = P.runParser grammarStr Grammar.parser
+      eGrammar = SP.runParser Grammar.parser grammarStr
       buildAst :: Grammar -> Either SP.ParseError (AST Int)
       buildAst grammar = WithGrammar.parse grammar (const 0) sourceStr
-      eAST = buildAst =<< lmap convertError eGrammar
+      eAST = buildAst =<< eGrammar
     liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
     (show <$> eAST) `shouldEqual` (Right expectationStr)
-
-
-convertError :: P.ParseError -> SP.ParseError
-convertError (P.ParseError error (P.Position { index })) = { error, pos : index }
 
 
 reportE :: forall a err. Show err => Show a => Either err a -> String

@@ -20,23 +20,28 @@ import Control.Alt ((<|>))
 import Grammar (Grammar, CharX(..), toChar)
 import Grammar as Grammar
 
-import Parsing (Parser)
-import Parsing (fail) as P
-import Parsing.Combinators ((<?>))
-import Parsing.Combinators as P
-import Parsing.Combinators.Array as PA
-import Parsing.String as P
-import Parsing.String.Basic as P
+-- import Parsing (Parser)
+-- import Parsing (fail) as P
+-- import Parsing.Combinators ((<?>))
+-- import Parsing.Combinators as P
+-- import Parsing.Combinators.Array as PA
+-- import Parsing.String as P
+-- import Parsing.String.Basic as P
+import StringParser (Parser)
+import StringParser (fail) as P
+import StringParser.Combinators as P
+import StringParser.CodeUnits as P
+import StringParser.Combinators ((<?>))
 
 
-type P a = Parser String a
+type P a = Parser a
 
 
 parser :: P Grammar
 parser =
     map
-        (NEA.toArray >>> Array.catMaybes >>> Map.fromFoldable >>> makeGrammar)
-        <$> PA.many1
+        (Array.fromFoldable >>> Array.catMaybes >>> Map.fromFoldable >>> makeGrammar)
+        <$> P.many1
             $ P.choice [ Nothing <$ emptyLine, Nothing <$ commentLine, Just <$> ruleLine ]
         <?> "expected at least one rule"
     where
@@ -53,7 +58,7 @@ emptyLine =
 
 commentLine :: P Unit
 commentLine =
-    void $ P.char '#' *> P.manyTill_ P.anyChar eol <?> "expected comment"
+    void $ P.char '#' *> P.manyTill P.anyChar eol <?> "expected comment"
 
 
 ruleLine :: P (Grammar.RuleName /\ Grammar.Rule)
@@ -127,10 +132,11 @@ text :: P Grammar.Rule
 text = defer \_ ->
     Grammar.Text <$>
     _buildString <$>
+    Array.fromFoldable <$>
     P.between
         (P.char '"')
         (P.char '"')
-        (PA.many $ _textChar '"' '\\')
+        (P.many $ _textChar '"' '\\')
 
 
 char :: P Grammar.Rule
@@ -208,8 +214,8 @@ repSepAlt = defer \_ ->
 _ident :: P String
 _ident =
     String.fromCharArray
-    <$> NEA.toArray
-    <$> (PA.many1 P.alphaNum <?> "expected identifier")
+    <$> Array.fromFoldable
+    <$> (P.many1 P.alphaNum <?> "expected identifier")
 
 
 _char :: P CharX
@@ -251,11 +257,6 @@ _notBut exclude pass = do
 
 ws :: P Unit
 ws = P.skipSpaces
-
-
-ws1 :: P Unit
-ws1 =
-    void $ PA.many1 P.space <?> "expected whitespace"
 
 
 eol :: P Unit
