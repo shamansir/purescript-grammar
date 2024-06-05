@@ -17,5 +17,6 @@ in conf // {
     , "datetime"
     , "exceptions"
     , "transformers"
+    , "bifunctors"
     ]
 }

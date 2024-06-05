@@ -1,5 +1,9 @@
 main {
+    a;
     goto end;
     t = 25;
     forkTo afterFork;
+    b;
+    x5 = 10;
 }
+end {}

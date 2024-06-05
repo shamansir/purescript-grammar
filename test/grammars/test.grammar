@@ -12,8 +12,8 @@ spaces :- repSep(" ", "").
 comment :- ["//", repSep(commentChar, "")].
 commentChar :- ^'\n'.
 valueInstr :- [([ident, ws, "=", ws] | ""), rvalue].
+#rvalue :- ([a-z] | const).
 rvalue :- const.
-# rvalue :- (call | const).
 call :- [ident, (params | "")].
 const :- int.
 int :- [[0-9], repSep([0-9], "")].

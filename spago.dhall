@@ -22,6 +22,7 @@ to generate this file without the comments in this block.
   , "prelude"
   , "string-parsers"
   , "strings"
+  , "stringutils"
   , "tuples"
   , "yoga-tree"
   ]

@@ -16,21 +16,26 @@ import Data.Array (singleton, fromFoldable) as Array
 import Data.String.CodeUnits (singleton) as String
 import Data.List (List(..)) as List
 
-import Parsing (Parser, ParseError, Position(..), runParser)
-import Parsing (position, fail) as P
-import Parsing.Combinators ((<?>))
-import Parsing.Combinators as P
-import Parsing.Combinators.Array as PA
-import Parsing.String as P
-import Parsing.String.Basic as P
+-- import Parsing (Parser, ParseError, Position(..), runParser)
+-- import Parsing (position, fail) as P
+-- import Parsing.Combinators ((<?>))
+-- import Parsing.Combinators as P
+import StringParser (Parser(..), ParseError, PosString, runParser)
+import StringParser (fail) as P
+import StringParser.Combinators as P -- TODO!
+import StringParser.CodePoints as P -- TODO!
+import Parsing.String
+-- import Parsing.Combinators.Array as PA
+-- import Parsing.String as P
+-- import Parsing.String.Basic as P
 
 
-type P a = Parser String a
+type P a = Parser a
 
 
 parse :: forall a. Grammar -> (Rule -> a) -> String -> Either ParseError (AST a)
 parse grammar f str =
-    runParser str $ parseRule (G.set grammar) f Main $ G.main grammar
+    flip runParser str $ parseRule (G.set grammar) f Main $ G.main grammar
 
 
 parseRule :: forall a. RuleSet -> (Rule -> a) -> MatchAt -> Rule -> P (AST a)
@@ -46,6 +51,16 @@ parseRule set f match rule =
         CharRule (Range from to) ->
             qleaf
                 $ do
+                    {-
+                    mbChar <- P.optionMaybe $ P.try $ P.anyChar
+                    case mbChar of
+                        Just ch ->
+                            if (ch >= from) && (ch <= to) then
+                                pure ch
+                            else
+                                P.fail $ show ch <> " is not from range " <> String.singleton from <> "-" <> String.singleton to
+                        Nothing -> P.fail $ "didn't found char from range " <> String.singleton from <> "-" <> String.singleton to
+                    -}
                     ch <- P.lookAhead $ P.anyChar
                     if (ch >= from) && (ch <= to) then
                         P.anyChar
@@ -57,7 +72,7 @@ parseRule set f match rule =
         Sequence rules ->
             qnode $ forWithIndex rules $ \idx -> parseRule set f $ InSequence idx
         Choice rules ->
-            qnode $ Array.singleton <$> (P.choice $ mapWithIndex (\idx -> parseRule set f $ ChoiceOf idx) rules)
+            qnode $ Array.singleton <$> (P.choice $ map P.try $ mapWithIndex (\idx -> parseRule set f $ ChoiceOf idx) rules)
         Ref mbCapture ruleName ->
             case G.findIn set ruleName of
                 Just rule -> parseRule set f (AtRule $ mbCapture # fromMaybe ruleName) rule
@@ -87,16 +102,19 @@ parseRule set f match rule =
         node rules range = Node { match, rule, range } (f rule) rules
         withRange :: forall c z. (c -> Range -> z) -> P c -> P z
         withRange frng p = do
-            (Position posBefore) <- P.position
+            posBefore <- _position
             res <- p
-            (Position posAfter) <- P.position
-            pure $ frng res { start : posBefore.index, end : posAfter.index }
-        isFromRange :: Char -> Char -> Char -> P Char
-        isFromRange from to ch =
-            if (ch >= from) && (ch <= to)
-                then pure ch
-                else P.fail $ show ch <> " is not from range " <> String.singleton from <> "-" <> String.singleton to
+            posAfter <- _position
+            pure $ frng res { start : posBefore, end : posAfter }
+        -- isFromRange :: Char -> Char -> Char -> P Char
+        -- isFromRange from to ch =
+        --     if (ch >= from) && (ch <= to)
+        --         then pure ch
+        --         else P.fail $ show ch <> " is not from range " <> String.singleton from <> "-" <> String.singleton to
 
+
+_position :: P Int
+_position = Parser \state -> pure { result : state.position, suffix : state }
 
 
 {-
