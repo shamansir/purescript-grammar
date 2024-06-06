@@ -79,6 +79,24 @@ data AST a
     | Node Match a (Array (AST a))
 
 
+{- TODO, add `Show` instance
+data Error
+    = TextError { expected :: String, found :: String }
+    | CharacterError { expected :: Char, found :: Char }
+    | CharacterRangeError { from :: Char, to :: Char, found :: Char }
+    | RuleNotFoundError { name :: String }
+    | RepeatError { rep :: Error }
+    | SeparatorError { sep :: Error }
+    | SequenceError { errors :: Array (Int /\ Error) }
+    | ChoiceError { errors :: Array (Int /\ Error) }
+-}
+
+
+{- TODO
+advance :: Rule -> Error -> Int
+-}
+
+
 empty :: Grammar
 empty = Grammar Placeholder Map.empty
 
@@ -115,6 +133,12 @@ toChar (Escaped ch) =
         '"' -> '\"'
         -- ''' -> '''
         other -> other
+
+
+toRepr :: CharX -> String
+toRepr (Raw ch) = String.singleton ch
+toRepr (Escaped ch) =
+    "\\" <> String.singleton ch
 
 
 instance Show CharRule where
@@ -191,4 +215,4 @@ instance Show a => Show (AST a) where
             smatch { at, range, rule } =
                 show at <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end
             sfailure { error, at, rule, position } =
-                "< " <> show error <> " :: " <> show at <> " " <> ruleType rule <> " @ " <> show position <> " >"
+                error <> " :: " <> show at <> " " <> ruleType rule <> " @" <> show position
