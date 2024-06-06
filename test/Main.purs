@@ -185,16 +185,26 @@ main = launchAff_ $ runSpec [consoleReporter] do
           "a"
           "main :- [c-g]."
           """< Expected character in range from 'c' to 'g', but found 'a' :: <main> char-range @0 >"""
-      {- it "parsing char sequences" $
+      it "parsing char sequences" $
         withgrm
           "foo"
           "main :- ['f','o','o']."
           "( 0 <main> seqnc 0-3 | ( 0 seq:0 char 0-1 ) : ( 0 seq:1 char 1-2 ) : ( 0 seq:2 char 2-3 ) )"
+      it "parsing char sequences fails" $
+        withgrm
+          "fxo"
+          "main :- ['f','o','o']."
+          "( 0 <main> seqnc 0-3 | ( 0 seq:0 char 0-1 ) : < Expected 'o', but found 'x' :: seq:1 char @1 > : ( 0 seq:2 char 2-3 ) )"
       it "parsing any-char sequences" $
         withgrm
           "foo"
           "main :- [.,.,.]."
           "( 0 <main> seqnc 0-3 | ( 0 seq:0 any 0-1 ) : ( 0 seq:1 any 1-2 ) : ( 0 seq:2 any 2-3 ) )"
+      it "parsing any-char sequences fails" $
+        withgrm
+          "fo"
+          "main :- [.,.,.]."
+          "( 0 <main> seqnc 0-2 | ( 0 seq:0 any 0-1 ) : ( 0 seq:1 any 1-2 ) : < Expected any character, but found '' :: seq:2 any @2 > )"
       it "parsing char's and rule sequences" $
         withgrm "foo"
           """main :- [f,o,o].
@@ -202,6 +212,13 @@ main = launchAff_ $ runSpec [consoleReporter] do
           o :- 'o'.
           """
           "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:o char 1-2 ) : ( 0 rule:o char 2-3 ) )"
+      it "parsing char's and rule sequences fails" $
+        withgrm "foo"
+          """main :- [f,o,f].
+          f :- 'f'.
+          o :- 'o'.
+          """
+          "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:o char 1-2 ) : < Expected 'f', but found 'o' :: rule:f char @2 > )" -- TODO: must be failed character rule inside `rule:f`
       it "parsing sequences with empty items" $
         withgrm "foo"
           """main :- [f,nothing,o,nothing,o].
@@ -210,12 +227,20 @@ main = launchAff_ $ runSpec [consoleReporter] do
           nothing :- "".
           """
           "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:nothing text 1-1 ) : ( 0 rule:o char 1-2 ) : ( 0 rule:nothing text 2-2 ) : ( 0 rule:o char 2-3 ) )"
+      it "parsing sequences with empty items fails" $
+        withgrm "fxo"
+          """main :- [f,nothing,o,nothing,o].
+          f :- 'f'.
+          o :- 'o'.
+          nothing :- "".
+          """
+          "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:nothing text 1-1 ) : < Expected 'o', but found 'x' :: rule:o char @1 > : ( 0 rule:nothing text 2-2 ) : ( 0 rule:o char 2-3 ) )"
       it "parsing char choice" $
         withgrm
           "o"
           "main :- ('f'|'o'|'o')."
           "( 0 <main> choice 0-1 | ( 0 ch:1 char 0-1 ) )"
-      it "parsing rep/sep" $
+      {- it "parsing rep/sep" $
         withgrm "f,o,o"
           """main :- repSep(fo,',').
           fo :- ('f'|'o').

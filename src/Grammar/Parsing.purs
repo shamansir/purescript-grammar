@@ -12,10 +12,11 @@ import Data.Either (Either(..))
 import Data.Traversable (for)
 import Data.TraversableWithIndex (forWithIndex)
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.Array (singleton, fromFoldable) as Array
+import Data.Array (singleton, fromFoldable, uncons, head) as Array
 import Data.String (take, length, drop) as String
 import Data.String.CodeUnits (singleton) as String
 import Data.List (List(..)) as List
+import Data.Foldable (foldl, class Foldable)
 
 -- import Parsing (Parser, ParseError, Position(..), runParser)
 -- import Parsing (position, fail) as P
@@ -73,7 +74,7 @@ parseRule set f at rule =
         Sequence rules ->
             qnode rule $ forWithIndex rules $ \idx -> parseRule set f $ InSequence idx
         Choice rules ->
-            qnode rule $ Array.singleton <$> (P.choice $ map P.try $ mapWithIndex (\idx -> parseRule set f $ ChoiceOf idx) rules)
+            qnode rule $ Array.singleton <$> (_choice Nil $ map P.try $ mapWithIndex (\idx -> parseRule set f $ ChoiceOf idx) rules)
         Ref mbCapture ruleName ->
             case G.findIn set ruleName of
                 Just foundRule -> parseRule set f (At $ mbCapture # fromMaybe ruleName) foundRule
@@ -125,7 +126,11 @@ parseRule set f at rule =
             CharRule (Not chx) -> "Expected not to find '" <> G.toRepr chx <> "', but found '" <> String.take 1 substr <> "'"
             CharRule (Range from to) -> "Expected character in range from '" <> String.singleton from <> "' to '" <> String.singleton to <> "', but found '" <> String.take 1 substr <> "'"
             CharRule Any -> "Expected any character, but found '" <> String.take 1 substr <> "'"
-            _ -> "???"
+            Choice _ -> "choice TODO"
+            Sequence _ -> "sequence TODO"
+            Ref _ _ -> "ref TODO"
+            RepSep _ _ -> "repsep TODO"
+            Placeholder -> "PLC"
         mkFailure :: PosString -> Rule -> AST a
         mkFailure state = const $ Fail { position : state.position, rule, at, error : mkErrorMessage state.substring rule }
         -- isFromRange :: Char -> Char -> Char -> P Char
@@ -133,6 +138,30 @@ parseRule set f at rule =
         --     if (ch >= from) && (ch <= to)
         --         then pure ch
         --         else P.fail $ show ch <> " is not from range " <> String.singleton from <> "-" <> String.singleton to
+
+
+_choice :: forall a. AST a -> Array (P (AST a)) -> P (AST a)
+_choice fallback = choiceIter 0 -- Array.scanl ??? FIXME
+    where
+        choiceIter idx items =
+            case Array.uncons items of
+                Just { head, tail } -> do
+                    stateBefore <- _state
+                    mbCurrent <- P.optionMaybe $ P.try head
+                    case mbCurrent of
+                        Just (Fail failure) -> do
+                            -- P.fail "aaa"
+                            -- DO smth
+                            choiceIter (idx + 1) tail
+                        Just success -> pure success
+                        Nothing -> do
+                            _rollback stateBefore
+                            choiceIter (idx + 1) tail
+                Nothing -> pure fallback
+
+
+_rollback :: forall a. PosString -> P Unit
+_rollback state = Parser $ const $ pure { result : unit, suffix : state }
 
 
 _advance :: Int -> P Unit
