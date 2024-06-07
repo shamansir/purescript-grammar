@@ -215,6 +215,8 @@ instance Show a => Show (AST a) where
             "( " <> show a <> " " <> smatch match <> " )"
         FailLeaf failure ->
             "< " <> sfailure failure <> " >"
+        FailNode failure [] ->
+            "< " <> sfailure failure <> " | " <> "∅" <> " >"
         FailNode failure children ->
             "< " <> sfailure failure <> " | " <> String.joinWith " : " (show <$> children) <> " >"
         where

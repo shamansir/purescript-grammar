@@ -91,12 +91,7 @@ parseRule set f at rule =
                 psep = parseRule set f SepOf sep
             in
                 -- qnode $ Array.fromFoldable <$> P.sepEndBy prep psep
-                qnode rule $ Array.fromFoldable <$> (do
-                    la <- P.optionMaybe $ P.lookAhead prep
-                    case la of
-                        Just _ -> P.sepEndBy prep psep
-                        Nothing -> pure List.Nil
-                    )
+                qnode rule $ _repSep prep psep
         Placeholder ->
             qleaf rule $ P.string "???"
     where
@@ -150,54 +145,95 @@ _makeError substr =
         qfoundchar = String.take 1 >>> String.charAt 0 >>> maybe G.eoi G.found -- FIXME: EOL/EOF
 
 
-_choice :: forall a. (PosString -> Failure) -> AST a -> Array (P (AST a)) -> P (AST a)
-_choice toFailure fallback = choiceIter [] 0 -- Array.scanl ??? FIXME
+_choice :: forall a. (PosString -> Failure) -> Array (P (AST a)) -> P (AST a)
+_choice toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
     where
-        choiceIter :: Array (AST a) -> Int -> Array (P (AST a)) -> P (AST a)
+        choiceIter :: Array (AST a) -> Int -> Array (P (AST a)) -> P (AST a) -- FIXME: return children array instead and wrap it in the AST node above
         choiceIter results idx items =
             case Array.uncons items of
                 Just { head, tail } -> do
                     mbCurrent <- P.optionMaybe $ P.tryAhead head
+                    let
+                        continueBy result = do
+                            choiceIter (result# Array.snoc results) (idx + 1) tail
                     case mbCurrent of
                         Just (FailLeaf failure) -> do
-                            choiceIter (FailLeaf failure # Array.snoc results) (idx + 1) tail
+                            continueBy $ FailLeaf failure
                         Just (FailNode failure children) -> do
-                            choiceIter (FailNode failure children # Array.snoc results) (idx + 1) tail
+                            continueBy $ FailNode failure children
                         Just _ -> do
                             applied <- P.assertConsume head
                             pure applied
                         Nothing -> do
-                            choiceIter (Nil # Array.snoc results) (idx + 1) tail
+                            continueBy $ Nil
                 Nothing -> do
                     curState <- _state
                     pure $ FailNode (toFailure curState) results
 
 
- -- duplicate of `choice`` which works the same way but with slightly different algorithm, test speed
+ -- duplicate of `choice`` which works the same way but with slightly different algorithm (`try` instead of `tryAhead` + `assertConsume`, but then rollbacks on failure), test speed
 _choice' :: forall a. (PosString -> Failure) -> Array (P (AST a)) -> P (AST a)
 _choice' toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
     where
-        choiceIter :: Array (AST a) -> Int -> Array (P (AST a)) -> P (AST a)
+        choiceIter :: Array (AST a) -> Int -> Array (P (AST a)) -> P (AST a) -- FIXME: return children array instead and wrap it in the AST node above
         choiceIter results idx items =
             case Array.uncons items of
                 Just { head, tail } -> do
                     stateBefore <- _state
                     mbCurrent <- P.optionMaybe $ P.try head
+                    let
+                        continueBy result = do
+                            _rollback stateBefore
+                            choiceIter (result # Array.snoc results) (idx + 1) tail
                     case mbCurrent of
                         Just (FailLeaf failure) -> do
-                            _rollback stateBefore
-                            choiceIter (FailLeaf failure # Array.snoc results) (idx + 1) tail
+                            continueBy $ FailLeaf failure
                         Just (FailNode failure children) -> do
-                            _rollback stateBefore
-                            choiceIter (FailLeaf failure # Array.snoc results) (idx + 1) tail
+                            continueBy $ FailNode failure children
                         Just success -> do
                             pure success
                         Nothing -> do
-                            _rollback stateBefore
-                            choiceIter (Nil # Array.snoc results) (idx + 1) tail
+                            continueBy $ Nil
                 Nothing -> do
                     curState <- _state
                     pure $ FailNode (toFailure curState) results
+
+
+_repSep :: forall a. P (AST a) -> P (AST a) -> P (Array (AST a))
+_repSep rep sep = do
+    repSepIter [] 0
+    where
+        repSepIter :: Array (AST a) -> Int -> P (Array (AST a))
+        repSepIter results index = do
+            mbRep <- P.optionMaybe $ P.tryAhead rep
+            let
+                stopWith lastFailure =
+                    pure (lastFailure # Array.snoc results)
+            case mbRep of
+                Just (FailLeaf failure) ->
+                    stopWith $ FailLeaf failure
+                Just (FailNode failure children) ->
+                    stopWith $ FailNode failure children
+                Just repSuccess -> do
+                    repApplied <- P.assertConsume rep
+                    mbSep <- P.optionMaybe $ P.tryAhead sep
+                    case mbSep of
+                        Just (FailLeaf failure) ->
+                            stopWith Nil
+                            -- stopWith $ FailLeaf failure
+                        Just (FailNode failure children) ->
+                            stopWith Nil
+                            -- stopWith $ FailNode failure children
+                        Just sepSuccess -> do
+                            _ <- P.assertConsume sep
+                            repSepIter (repSuccess # Array.snoc results) $ index + 1
+                        Nothing ->
+                            stopWith Nil
+                Nothing ->
+                    stopWith Nil
+
+
+
 
 
 _rollback :: PosString -> P Unit
