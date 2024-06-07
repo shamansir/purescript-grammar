@@ -35,11 +35,6 @@ data CharRule
     | Any
 
 
-data CharX
-    = Escaped Char
-    | Raw Char
-
-
 type RuleName = String
 
 
@@ -82,11 +77,11 @@ data AST a
 
 
 data Error
-    = TextError { expected :: String, found :: String }
-    | CharacterError { expected :: CharX, found :: Char }
-    | NegCharacterError { notExpected :: CharX, found :: Char }
-    | CharacterRangeError { from :: Char, to :: Char, found :: Char }
-    | AnyCharacterError { found :: Char }
+    = TextError { expected :: Expected String, found :: Found String }
+    | CharacterError { expected :: Expected CharX, found :: Found Char }
+    | NegCharacterError { notExpected :: Expected CharX, found :: Found Char }
+    | CharacterRangeError { from :: Expected Char, to :: Expected Char, found :: Found Char }
+    | AnyCharacterError { found :: Found Char }
     | RuleNotFoundError { name :: String }
     -- | RepeatError { occurence :: Int } -- { occurence :: Int, rep :: Error }
     -- | SeparatorError { occurence :: Int } -- { occurence :: Int, sep :: Error }
@@ -95,6 +90,23 @@ data Error
     | ChoiceError {} -- { errors :: Array Error }
     | PlaceholderError
     | Unknown
+
+
+data CharX
+    = Escaped Char
+    | Raw Char
+
+
+-- TODO: Merge `Found` and `Expected`, EndOfInput could also be expected
+
+
+data Found a
+    = Found a
+    | EOI
+
+
+newtype Expected a
+    = Expected a
 
 
 {- TODO
@@ -227,16 +239,55 @@ instance Show a => Show (AST a) where
 
 instance Show Error where
     show = case _ of
-        TextError { expected, found } -> "Expected '" <> expected <> "', but found '" <> found <> "'"
-        CharacterError { expected, found } -> "Expected '" <> toRepr expected <> "', but found '" <> String.singleton found <> "'"
-        NegCharacterError { notExpected, found } -> "Expected not to find '" <> toRepr notExpected <> "', but found '" <> String.singleton found <> "'"
-        CharacterRangeError { from, to, found } -> "Expected character in range from '" <> String.singleton from <> "' to '" <> String.singleton to <> "', but found '" <> String.singleton found <> "'"
-        AnyCharacterError { found } -> "Expected any character, but found '" <> String.singleton found <> "'"
-        ChoiceError { } -> "choice TODO"
-        RuleNotFoundError { name } -> "Rule `" <> name <> "` was not found"
-        SequenceError {} -> "sequence TODO"
-        -- RepeatError { occurence } -> "rep TODO"
-        -- SeparatorError { occurence } -> "sep TODO"
-        RepSepError { occurence } -> "repsep TODO"
+        TextError err -> "Expected " <> show err.expected <> ", but found " <> show err.found
+        CharacterError err -> "Expected " <> show err.expected <> ", but found " <> show err.found
+        NegCharacterError err -> "Expected not to find " <> show err.notExpected <> ", but found " <> show err.found
+        CharacterRangeError err -> "Expected character in range from " <> show err.from <> " to " <> show err.to <> ", but found " <> show err.found
+        AnyCharacterError err -> "Expected any character, but found " <> show err.found
+        ChoiceError _ -> "None of choices matched input"
+        RuleNotFoundError err -> "Rule `" <> err.name <> "` was not found"
+        SequenceError _ -> "sequence TODO"
+        -- RepeatError err -> "rep TODO"
+        -- SeparatorError err -> "sep TODO"
+        RepSepError _ -> "repsep TODO"
         PlaceholderError -> "PLC"
         Unknown -> "UNK"
+
+
+instance Show (Found Char) where
+    show = case _ of
+        Found ch -> "'" <> String.singleton ch <> "'"
+        EOI -> "end-of-input"
+
+
+instance Show (Found String) where
+    show = case _ of
+        Found str -> "'" <> str <> "'"
+        EOI -> "end-of-input"
+
+
+instance Show (Expected Char) where
+    show = case _ of
+        Expected ch -> "'" <> String.singleton ch <> "'"
+
+
+instance Show (Expected CharX) where
+    show = case _ of
+        Expected chx -> "'" <> toRepr chx <> "'"
+
+
+instance Show (Expected String) where
+    show = case _ of
+        Expected str -> "'" <> str <> "'"
+
+
+found :: forall a. a -> Found a
+found = Found
+
+
+expected :: forall a. a -> Expected a
+expected = Expected
+
+
+eoi :: forall a. Found a
+eoi = EOI

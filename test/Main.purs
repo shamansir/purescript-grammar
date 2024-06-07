@@ -204,7 +204,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm
           "fo"
           "main :- [.,.,.]."
-          "( 0 <main> seqnc 0-2 | ( 0 seq:0 any 0-1 ) : ( 0 seq:1 any 1-2 ) : < Expected any character, but found '' :: seq:2 any @2 > )"
+          "( 0 <main> seqnc 0-2 | ( 0 seq:0 any 0-1 ) : ( 0 seq:1 any 1-2 ) : < Expected any character, but found end-of-input :: seq:2 any @2 > )"
       it "parsing char's and rule sequences" $
         withgrm "foo"
           """main :- [f,o,o].
@@ -244,7 +244,9 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm
           "x"
           "main :- ('f'|'o'|'o')."
-          "( 0 <main> choice 0-1 | < Expected 'f', but found 'x' :: rule:f char @0 > : < Expected 'o', but found 'x' :: rule:f char @0 > : < Expected 'o', but found 'x' :: rule:f char @0 > )"
+          "( 0 <main> choice 0-0 | < None of choices matched input :: <main> choice @0 | < Expected 'f', but found 'x' :: ch:0 char @0 > : < Expected 'o', but found 'x' :: ch:1 char @0 > : < Expected 'o', but found 'x' :: ch:2 char @0 > > )"
+          -- should be either: "< None of choices matched input :: <main> choice @0 | < Expected 'f', but found 'x' :: ch:0 char @0 > : < Expected 'o', but found 'x' :: ch:1 char @0 > : < Expected 'o', but found 'x' :: ch:2 char @0 > >"
+          -- ...or: "( 0 <main> choice 0-0 | < Expected 'f', but found 'x' :: rule:f char @0 > : < Expected 'o', but found 'x' :: rule:f char @0 > : < Expected 'o', but found 'x' :: rule:f char @0 > )"
       {- it "parsing rep/sep" $
         withgrm "f,o,o"
           """main :- repSep(fo,',').

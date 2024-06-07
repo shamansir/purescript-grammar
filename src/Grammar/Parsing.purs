@@ -5,11 +5,11 @@ import Prelude
 import Debug as Debug
 
 import Grammar (Grammar, AST(..), Rule(..), CharRule(..), At(..), CharX(..), Error(..), Failure, RuleName, RuleSet, Range)
-import Grammar (main, find, findIn, set, toChar, toRepr) as G
+import Grammar (main, find, findIn, set, toChar, toRepr, found, expected, eoi) as G
 
 import Control.Lazy (defer)
 
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Either (Either(..))
 import Data.Traversable (for)
 import Data.TraversableWithIndex (forWithIndex)
@@ -136,18 +136,18 @@ parseRule set f at rule =
 _makeError :: String -> Rule -> Error
 _makeError substr =
     case _ of
-        Text expected -> TextError { expected, found : String.take (String.length expected) substr }
-        CharRule (Single chx) -> CharacterError { expected : chx, found : qchar substr }
-        CharRule (Not chx) -> NegCharacterError { notExpected : chx, found : qchar substr }
-        CharRule (Range from to) -> CharacterRangeError { from, to, found : qchar substr }
-        CharRule Any -> AnyCharacterError { found : qchar substr }
+        Text expected -> TextError { expected : G.expected expected, found : G.found $ String.take (String.length expected) substr }
+        CharRule (Single chx) -> CharacterError { expected : G.expected chx, found : qfoundchar substr }
+        CharRule (Not chx) -> NegCharacterError { notExpected : G.expected chx, found : qfoundchar substr }
+        CharRule (Range from to) -> CharacterRangeError { from : G.expected from, to : G.expected to, found : qfoundchar substr }
+        CharRule Any -> AnyCharacterError { found : qfoundchar substr }
         Choice _ -> ChoiceError { }
         Sequence _ -> SequenceError { }
         Ref _ name -> RuleNotFoundError { name }
         RepSep _ _ -> RepSepError { occurence : 0 } -- FIXME
         Placeholder -> PlaceholderError
     where
-        qchar = String.take 1 >>> String.charAt 0 >>> fromMaybe '?' -- FIXME: EOL/EOF
+        qfoundchar = String.take 1 >>> String.charAt 0 >>> maybe G.eoi G.found -- FIXME: EOL/EOF
 
 
 _choice :: forall a. (PosString -> Failure) -> AST a -> Array (P (AST a)) -> P (AST a)
