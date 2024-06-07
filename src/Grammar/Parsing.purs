@@ -4,7 +4,7 @@ import Prelude
 
 import Debug as Debug
 
-import Grammar (Grammar, AST(..), Rule(..), CharRule(..), At(..), CharX(..), Failure, RuleName, RuleSet, Range)
+import Grammar (Grammar, AST(..), Rule(..), CharRule(..), At(..), CharX(..), Error(..), Failure, RuleName, RuleSet, Range)
 import Grammar (main, find, findIn, set, toChar, toRepr) as G
 
 import Control.Lazy (defer)
@@ -16,7 +16,7 @@ import Data.TraversableWithIndex (forWithIndex)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Array (singleton, fromFoldable, uncons, head, snoc) as Array
 import Data.String (take, length, drop) as String
-import Data.String.CodeUnits (singleton) as String
+import Data.String.CodeUnits (singleton, charAt) as String
 import Data.List (List(..)) as List
 import Data.Foldable (foldl, class Foldable)
 
@@ -76,7 +76,11 @@ parseRule set f at rule =
         Sequence rules ->
             qnode rule $ forWithIndex rules $ \idx -> parseRule set f $ InSequence idx
         Choice rules ->
-            qnode rule $ Array.singleton <$> (_choice' Nil $ map P.try $ mapWithIndex (\idx -> parseRule set f $ ChoiceOf idx) rules)
+            qnode rule $ Array.singleton <$>
+                (_choice' failureFromState
+                    $ map P.try
+                    $ mapWithIndex
+                        (\idx -> parseRule set f $ ChoiceOf idx) rules)
         Ref mbCapture ruleName ->
             case G.findIn set ruleName of
                 Just foundRule -> parseRule set f (At $ mbCapture # fromMaybe ruleName) foundRule
@@ -97,9 +101,9 @@ parseRule set f at rule =
             qleaf rule $ P.string "???"
     where
         qleaf :: forall с. Rule -> P с -> P (AST a)
-        qleaf = withRange leaf <<< flip mkFailure
+        qleaf = withRange leaf <<< flip mkLeafFailure
         qnode :: Rule -> P (Array (AST a)) -> P (AST a)
-        qnode = withRange node <<< flip mkFailure
+        qnode = withRange node <<< flip mkNodeFailure
         leaf :: forall x. x -> Range -> AST a
         leaf _ range = Leaf { at, rule, range } $ f rule
         node :: Array (AST a) -> Range -> AST a
@@ -121,66 +125,79 @@ parseRule set f at rule =
             CharRule _ -> 1
             Placeholder -> 3
             _ -> 0
-        mkErrorMessage :: String -> Rule -> String
-        mkErrorMessage substr = case _ of
-            Text expected -> "Expected '" <> expected <> "', but found '" <> String.take (String.length expected) substr <> "'"
-            CharRule (Single chx) -> "Expected '" <> G.toRepr chx <> "', but found '" <> String.take 1 substr <> "'"
-            CharRule (Not chx) -> "Expected not to find '" <> G.toRepr chx <> "', but found '" <> String.take 1 substr <> "'"
-            CharRule (Range from to) -> "Expected character in range from '" <> String.singleton from <> "' to '" <> String.singleton to <> "', but found '" <> String.take 1 substr <> "'"
-            CharRule Any -> "Expected any character, but found '" <> String.take 1 substr <> "'"
-            Choice _ -> "choice TODO"
-            Sequence _ -> "sequence TODO"
-            Ref _ _ -> "ref TODO"
-            RepSep _ _ -> "repsep TODO"
-            Placeholder -> "PLC"
-        mkFailure :: PosString -> Rule -> AST a
-        mkFailure state = const $ Fail { position : state.position, rule, at, error : mkErrorMessage state.substring rule }
-        -- isFromRange :: Char -> Char -> Char -> P Char
-        -- isFromRange from to ch =
-        --     if (ch >= from) && (ch <= to)
-        --         then pure ch
-        --         else P.fail $ show ch <> " is not from range " <> String.singleton from <> "-" <> String.singleton to
+        failureFromState :: PosString -> Failure
+        failureFromState state = { position : state.position, rule, at, error : _makeError state.substring rule }
+        mkLeafFailure :: PosString -> Rule -> AST a
+        mkLeafFailure state = const $ FailLeaf $ failureFromState state
+        mkNodeFailure :: PosString -> Rule -> AST a -- This should never occur when error-saving technique is used, since all parsers in the nodes formally succeed (just signalizing the fail with `Fail` constructor of `AST` datatype)
+        mkNodeFailure state = const $ FailNode (failureFromState state) []
 
 
-_choice :: forall a. AST a -> Array (P (AST a)) -> P (AST a)
-_choice fallback = choiceIter [] 0 -- Array.scanl ??? FIXME
+_makeError :: String -> Rule -> Error
+_makeError substr =
+    case _ of
+        Text expected -> TextError { expected, found : String.take (String.length expected) substr }
+        CharRule (Single chx) -> CharacterError { expected : chx, found : qchar substr }
+        CharRule (Not chx) -> NegCharacterError { notExpected : chx, found : qchar substr }
+        CharRule (Range from to) -> CharacterRangeError { from, to, found : qchar substr }
+        CharRule Any -> AnyCharacterError { found : qchar substr }
+        Choice _ -> ChoiceError { }
+        Sequence _ -> SequenceError { }
+        Ref _ name -> RuleNotFoundError { name }
+        RepSep _ _ -> RepSepError { occurence : 0 } -- FIXME
+        Placeholder -> PlaceholderError
     where
-        choiceIter :: Array (Maybe Failure) -> Int -> Array (P (AST a)) -> P (AST a)
-        choiceIter failures idx items =
+        qchar = String.take 1 >>> String.charAt 0 >>> fromMaybe '?' -- FIXME: EOL/EOF
+
+
+_choice :: forall a. (PosString -> Failure) -> AST a -> Array (P (AST a)) -> P (AST a)
+_choice toFailure fallback = choiceIter [] 0 -- Array.scanl ??? FIXME
+    where
+        choiceIter :: Array (AST a) -> Int -> Array (P (AST a)) -> P (AST a)
+        choiceIter results idx items =
             case Array.uncons items of
                 Just { head, tail } -> do
                     mbCurrent <- P.optionMaybe $ P.tryAhead head
                     case mbCurrent of
-                        Just (Fail failure) -> do
-                            choiceIter (Just failure # Array.snoc failures) (idx + 1) tail
+                        Just (FailLeaf failure) -> do
+                            choiceIter (FailLeaf failure # Array.snoc results) (idx + 1) tail
+                        Just (FailNode failure children) -> do
+                            choiceIter (FailNode failure children # Array.snoc results) (idx + 1) tail
                         Just _ -> do
                             applied <- P.assertConsume head
                             pure applied
                         Nothing -> do
-                            choiceIter (Nothing # Array.snoc failures) (idx + 1) tail
-                Nothing -> pure fallback
+                            choiceIter (Nil # Array.snoc results) (idx + 1) tail
+                Nothing -> do
+                    curState <- _state
+                    pure $ FailNode (toFailure curState) results
 
 
  -- duplicate of `choice`` which works the same way but with slightly different algorithm, test speed
-_choice' :: forall a. AST a -> Array (P (AST a)) -> P (AST a)
-_choice' fallback = choiceIter [] 0 -- Array.scanl ??? FIXME
+_choice' :: forall a. (PosString -> Failure) -> Array (P (AST a)) -> P (AST a)
+_choice' toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
     where
-        choiceIter :: Array (Maybe Failure) -> Int -> Array (P (AST a)) -> P (AST a)
-        choiceIter failures idx items =
+        choiceIter :: Array (AST a) -> Int -> Array (P (AST a)) -> P (AST a)
+        choiceIter results idx items =
             case Array.uncons items of
                 Just { head, tail } -> do
                     stateBefore <- _state
                     mbCurrent <- P.optionMaybe $ P.try head
                     case mbCurrent of
-                        Just (Fail failure) -> do
+                        Just (FailLeaf failure) -> do
                             _rollback stateBefore
-                            choiceIter (Just failure # Array.snoc failures) (idx + 1) tail
+                            choiceIter (FailLeaf failure # Array.snoc results) (idx + 1) tail
+                        Just (FailNode failure children) -> do
+                            _rollback stateBefore
+                            choiceIter (FailLeaf failure # Array.snoc results) (idx + 1) tail
                         Just success -> do
                             pure success
                         Nothing -> do
                             _rollback stateBefore
-                            choiceIter (Nothing # Array.snoc failures) (idx + 1) tail
-                Nothing -> pure fallback
+                            choiceIter (Nil # Array.snoc results) (idx + 1) tail
+                Nothing -> do
+                    curState <- _state
+                    pure $ FailNode (toFailure curState) results
 
 
 _rollback :: PosString -> P Unit

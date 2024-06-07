@@ -8,6 +8,7 @@ import Data.Map (empty, lookup, toUnfoldable) as Map
 import Data.String (joinWith) as String
 import Data.String.CodeUnits (singleton) as String
 import Data.Tuple (Tuple(..))
+import Data.Tuple.Nested ((/\), type (/\))
 import Data.Tuple (uncurry) as Tuple
 
 
@@ -68,28 +69,32 @@ type Failure =
     { position :: Int
     , at :: At
     , rule :: Rule
-    , error :: String
+    , error :: Error
     }
 
 
 data AST a
     = Nil
-    | Fail Failure
     | Leaf Match a
     | Node Match a (Array (AST a))
+    | FailLeaf Failure
+    | FailNode Failure (Array (AST a)) -- Array Failure?
 
 
-{- TODO, add `Show` instance
 data Error
     = TextError { expected :: String, found :: String }
-    | CharacterError { expected :: Char, found :: Char }
+    | CharacterError { expected :: CharX, found :: Char }
+    | NegCharacterError { notExpected :: CharX, found :: Char }
     | CharacterRangeError { from :: Char, to :: Char, found :: Char }
+    | AnyCharacterError { found :: Char }
     | RuleNotFoundError { name :: String }
-    | RepeatError { rep :: Error }
-    | SeparatorError { sep :: Error }
-    | SequenceError { errors :: Array (Int /\ Error) }
-    | ChoiceError { errors :: Array (Int /\ Error) }
--}
+    -- | RepeatError { occurence :: Int } -- { occurence :: Int, rep :: Error }
+    -- | SeparatorError { occurence :: Int } -- { occurence :: Int, sep :: Error }
+    | RepSepError { occurence :: Int }
+    | SequenceError {} -- { errors :: Array Error }
+    | ChoiceError {} -- { errors :: Array Error }
+    | PlaceholderError
+    | Unknown
 
 
 {- TODO
@@ -196,8 +201,10 @@ instance Show a => Show (AST a) where
             "( " <> show a <> " " <> smatch match <> " | " <> String.joinWith " : " (show <$> children) <> " )"
         Leaf match a ->
             "( " <> show a <> " " <> smatch match <> " )"
-        Fail failure ->
+        FailLeaf failure ->
             "< " <> sfailure failure <> " >"
+        FailNode failure children ->
+            "< " <> sfailure failure <> " | " <> String.joinWith " : " (show <$> children) <> " >"
         where
 
             ruleType = case _ of
@@ -215,4 +222,21 @@ instance Show a => Show (AST a) where
             smatch { at, range, rule } =
                 show at <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end
             sfailure { error, at, rule, position } =
-                error <> " :: " <> show at <> " " <> ruleType rule <> " @" <> show position
+                show error <> " :: " <> show at <> " " <> ruleType rule <> " @" <> show position
+
+
+instance Show Error where
+    show = case _ of
+        TextError { expected, found } -> "Expected '" <> expected <> "', but found '" <> found <> "'"
+        CharacterError { expected, found } -> "Expected '" <> toRepr expected <> "', but found '" <> String.singleton found <> "'"
+        NegCharacterError { notExpected, found } -> "Expected not to find '" <> toRepr notExpected <> "', but found '" <> String.singleton found <> "'"
+        CharacterRangeError { from, to, found } -> "Expected character in range from '" <> String.singleton from <> "' to '" <> String.singleton to <> "', but found '" <> String.singleton found <> "'"
+        AnyCharacterError { found } -> "Expected any character, but found '" <> String.singleton found <> "'"
+        ChoiceError { } -> "choice TODO"
+        RuleNotFoundError { name } -> "Rule `" <> name <> "` was not found"
+        SequenceError {} -> "sequence TODO"
+        -- RepeatError { occurence } -> "rep TODO"
+        -- SeparatorError { occurence } -> "sep TODO"
+        RepSepError { occurence } -> "repsep TODO"
+        PlaceholderError -> "PLC"
+        Unknown -> "UNK"
