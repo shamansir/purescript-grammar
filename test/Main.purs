@@ -255,7 +255,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
           """main :- repSep(fo,',').
           fo :- ('f'|'o').
           """
-          "( 0 <main> repsep 0-5 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 rule:fo choice 4-5 | ( 0 ch:1 char 4-5 ) ) )"
+          "( 0 <main> repsep 0-5 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 sep char 1-2 ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 sep char 3-4 ) : ( 0 rule:fo choice 4-5 | ( 0 ch:1 char 4-5 ) ) : < Expected ',', but found end-of-input :: sep char @5 > )"
       {- it "parsing rep/sep 2" $
         withgrm "foo"
           """main :- repSep(fo,"").

@@ -145,6 +145,27 @@ _makeError substr =
         qfoundchar = String.take 1 >>> String.charAt 0 >>> maybe G.eoi G.found -- FIXME: EOL/EOF
 
 
+_tryAhead :: forall a b. { onFail :: AST a -> P b, onSuccess :: AST a -> P b } -> P (AST a) -> P b
+_tryAhead spec p = (P.tryAhead p # P.optionMaybe) >>= _mbHelper spec
+
+
+_try :: forall a b. { onFail :: AST a -> P b, onSuccess :: AST a -> P b } -> P (AST a) -> P b
+_try spec p = (P.try p # P.optionMaybe) >>= _mbHelper spec
+
+
+_mbHelper :: forall a b. { onFail :: AST a -> P b, onSuccess :: AST a -> P b } -> Maybe (AST a) -> P b
+_mbHelper spec =
+    case _ of
+        Just (FailLeaf failure) -> do
+            spec.onFail $ FailLeaf failure
+        Just (FailNode failure children) -> do
+            spec.onFail $ FailNode failure children
+        Just success -> do
+            spec.onSuccess success
+        Nothing -> do
+            spec.onFail $ Nil
+
+
 _choice :: forall a. (PosString -> Failure) -> Array (P (AST a)) -> P (AST a)
 _choice toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
     where
@@ -152,20 +173,15 @@ _choice toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
         choiceIter results idx items =
             case Array.uncons items of
                 Just { head, tail } -> do
-                    mbCurrent <- P.optionMaybe $ P.tryAhead head
-                    let
-                        continueBy result = do
-                            choiceIter (result# Array.snoc results) (idx + 1) tail
-                    case mbCurrent of
-                        Just (FailLeaf failure) -> do
-                            continueBy $ FailLeaf failure
-                        Just (FailNode failure children) -> do
-                            continueBy $ FailNode failure children
-                        Just _ -> do
-                            applied <- P.assertConsume head
-                            pure applied
-                        Nothing -> do
-                            continueBy $ Nil
+                    head # _tryAhead
+                        { onFail :
+                            \failure -> do
+                                choiceIter (failure # Array.snoc results) (idx + 1) tail
+                        , onSuccess :
+                            \_ -> do
+                                applied <- P.assertConsume head
+                                pure applied
+                        }
                 Nothing -> do
                     curState <- _state
                     pure $ FailNode (toFailure curState) results
@@ -180,20 +196,13 @@ _choice' toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
             case Array.uncons items of
                 Just { head, tail } -> do
                     stateBefore <- _state
-                    mbCurrent <- P.optionMaybe $ P.try head
-                    let
-                        continueBy result = do
-                            _rollback stateBefore
-                            choiceIter (result # Array.snoc results) (idx + 1) tail
-                    case mbCurrent of
-                        Just (FailLeaf failure) -> do
-                            continueBy $ FailLeaf failure
-                        Just (FailNode failure children) -> do
-                            continueBy $ FailNode failure children
-                        Just success -> do
-                            pure success
-                        Nothing -> do
-                            continueBy $ Nil
+                    head # _try
+                        { onFail :
+                            \failure -> do
+                                _rollback stateBefore
+                                choiceIter (failure # Array.snoc results) (idx + 1) tail
+                        , onSuccess : pure
+                        }
                 Nothing -> do
                     curState <- _state
                     pure $ FailNode (toFailure curState) results
@@ -201,11 +210,33 @@ _choice' toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
 
 _repSep :: forall a. P (AST a) -> P (AST a) -> P (Array (AST a))
 _repSep rep sep = do
-    repSepIter [] 0
+    rep # _tryAhead
+        { onFail : pure <<< Array.singleton
+        , onSuccess :
+            \repSuccess -> do
+                _ <- P.assertConsume rep
+                repSepIter (Array.singleton repSuccess) 1
+        }
     where
         repSepIter :: Array (AST a) -> Int -> P (Array (AST a))
         repSepIter results index = do
-            mbRep <- P.optionMaybe $ P.tryAhead rep
+            sep # _tryAhead
+                { onFail :
+                    \sepFailure -> pure (sepFailure # Array.snoc results)
+                , onSuccess : \sepSuccess -> do
+                    _ <- P.assertConsume sep -- do not consume if next rep fails?
+                    rep # _tryAhead
+                        { onFail :
+                            \repFailure ->
+                                pure (sepSuccess # Array.snoc (repFailure # Array.snoc results))
+                        , onSuccess :
+                            \repSuccess -> do
+                                _ <- P.assertConsume rep -- do not consume if next rep fails?
+                                repSepIter (repSuccess # Array.snoc (sepSuccess # Array.snoc results)) $ index + 1
+                        }
+
+                }
+            {-
             let
                 stopWith lastFailure =
                     pure (lastFailure # Array.snoc results)
@@ -226,11 +257,12 @@ _repSep rep sep = do
                             -- stopWith $ FailNode failure children
                         Just sepSuccess -> do
                             _ <- P.assertConsume sep
-                            repSepIter (repSuccess # Array.snoc results) $ index + 1
+                            repSepIter (sepSuccess # Array.snoc (repSuccess # Array.snoc results)) $ index + 1
                         Nothing ->
                             stopWith Nil
                 Nothing ->
                     stopWith Nil
+            -}
 
 
 
