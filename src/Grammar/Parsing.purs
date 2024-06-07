@@ -2,7 +2,9 @@ module Grammar.Parsing where
 
 import Prelude
 
-import Grammar (Grammar, AST(..), Rule(..), CharRule(..), At(..), CharX(..), RuleName, RuleSet, Range)
+import Debug as Debug
+
+import Grammar (Grammar, AST(..), Rule(..), CharRule(..), At(..), CharX(..), Failure, RuleName, RuleSet, Range)
 import Grammar (main, find, findIn, set, toChar, toRepr) as G
 
 import Control.Lazy (defer)
@@ -12,7 +14,7 @@ import Data.Either (Either(..))
 import Data.Traversable (for)
 import Data.TraversableWithIndex (forWithIndex)
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.Array (singleton, fromFoldable, uncons, head) as Array
+import Data.Array (singleton, fromFoldable, uncons, head, snoc) as Array
 import Data.String (take, length, drop) as String
 import Data.String.CodeUnits (singleton) as String
 import Data.List (List(..)) as List
@@ -74,7 +76,7 @@ parseRule set f at rule =
         Sequence rules ->
             qnode rule $ forWithIndex rules $ \idx -> parseRule set f $ InSequence idx
         Choice rules ->
-            qnode rule $ Array.singleton <$> (_choice Nil $ map P.try $ mapWithIndex (\idx -> parseRule set f $ ChoiceOf idx) rules)
+            qnode rule $ Array.singleton <$> (_choice' Nil $ map P.try $ mapWithIndex (\idx -> parseRule set f $ ChoiceOf idx) rules)
         Ref mbCapture ruleName ->
             case G.findIn set ruleName of
                 Just foundRule -> parseRule set f (At $ mbCapture # fromMaybe ruleName) foundRule
@@ -141,26 +143,47 @@ parseRule set f at rule =
 
 
 _choice :: forall a. AST a -> Array (P (AST a)) -> P (AST a)
-_choice fallback = choiceIter 0 -- Array.scanl ??? FIXME
+_choice fallback = choiceIter [] 0 -- Array.scanl ??? FIXME
     where
-        choiceIter idx items =
+        choiceIter :: Array (Maybe Failure) -> Int -> Array (P (AST a)) -> P (AST a)
+        choiceIter failures idx items =
+            case Array.uncons items of
+                Just { head, tail } -> do
+                    mbCurrent <- P.optionMaybe $ P.tryAhead head
+                    case mbCurrent of
+                        Just (Fail failure) -> do
+                            choiceIter (Just failure # Array.snoc failures) (idx + 1) tail
+                        Just _ -> do
+                            applied <- P.assertConsume head
+                            pure applied
+                        Nothing -> do
+                            choiceIter (Nothing # Array.snoc failures) (idx + 1) tail
+                Nothing -> pure fallback
+
+
+ -- duplicate of `choice`` which works the same way but with slightly different algorithm, test speed
+_choice' :: forall a. AST a -> Array (P (AST a)) -> P (AST a)
+_choice' fallback = choiceIter [] 0 -- Array.scanl ??? FIXME
+    where
+        choiceIter :: Array (Maybe Failure) -> Int -> Array (P (AST a)) -> P (AST a)
+        choiceIter failures idx items =
             case Array.uncons items of
                 Just { head, tail } -> do
                     stateBefore <- _state
                     mbCurrent <- P.optionMaybe $ P.try head
                     case mbCurrent of
                         Just (Fail failure) -> do
-                            -- P.fail "aaa"
-                            -- DO smth
-                            choiceIter (idx + 1) tail
-                        Just success -> pure success
+                            _rollback stateBefore
+                            choiceIter (Just failure # Array.snoc failures) (idx + 1) tail
+                        Just success -> do
+                            pure success
                         Nothing -> do
                             _rollback stateBefore
-                            choiceIter (idx + 1) tail
+                            choiceIter (Nothing # Array.snoc failures) (idx + 1) tail
                 Nothing -> pure fallback
 
 
-_rollback :: forall a. PosString -> P Unit
+_rollback :: PosString -> P Unit
 _rollback state = Parser $ const $ pure { result : unit, suffix : state }
 
 

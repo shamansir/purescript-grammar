@@ -235,11 +235,16 @@ main = launchAff_ $ runSpec [consoleReporter] do
           nothing :- "".
           """
           "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:nothing text 1-1 ) : < Expected 'o', but found 'x' :: rule:o char @1 > : ( 0 rule:nothing text 2-2 ) : ( 0 rule:o char 2-3 ) )"
-      it "parsing char choice" $
-        withgrm
-          "o"
-          "main :- ('f'|'o'|'o')."
-          "( 0 <main> choice 0-1 | ( 0 ch:1 char 0-1 ) )"
+    it "parsing char choice" $
+      withgrm
+        "o"
+        "main :- ('f'|'o'|'o')."
+        "( 0 <main> choice 0-1 | ( 0 ch:1 char 0-1 ) )"
+    it "parsing char choice fails" $
+      withgrm
+        "x"
+        "main :- ('f'|'o'|'o')."
+        "( 0 <main> choice 0-1 | < Expected 'f', but found 'x' :: rule:f char @0 > : < Expected 'o', but found 'x' :: rule:f char @0 > : < Expected 'o', but found 'x' :: rule:f char @0 > )"
       {- it "parsing rep/sep" $
         withgrm "f,o,o"
           """main :- repSep(fo,',').
