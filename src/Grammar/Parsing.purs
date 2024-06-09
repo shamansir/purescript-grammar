@@ -17,6 +17,7 @@ import Data.FunctorWithIndex (mapWithIndex)
 import Data.Array (singleton, fromFoldable, uncons, head, snoc) as Array
 import Data.String (take, length, drop) as String
 import Data.String.CodeUnits (singleton, charAt) as String
+-- import Data.String.CodePoints (eof) as String
 import Data.List (List(..)) as List
 import Data.Foldable (foldl, class Foldable)
 
@@ -44,6 +45,7 @@ parse grammar f str =
 
 parseRule :: forall a. RuleSet -> (Rule -> a) -> At -> Rule -> P (AST a)
 parseRule set f at rule =
+    -- TODO: most of the parsers here use `P.fail` from the inside but the error result is then skipped and treated as failure on a higher level (e.g. leaf in the node)
     case rule of
         Text text -> qleaf rule $ P.string text
         CharRule (Single chx) -> qleaf rule $ P.char $ G.toChar chx
@@ -55,16 +57,6 @@ parseRule set f at rule =
         CharRule (Range from to) ->
             qleaf rule
                 $ do
-                    {-
-                    mbChar <- P.optionMaybe $ P.try $ P.anyChar
-                    case mbChar of
-                        Just ch ->
-                            if (ch >= from) && (ch <= to) then
-                                pure ch
-                            else
-                                P.fail $ show ch <> " is not from range " <> String.singleton from <> "-" <> String.singleton to
-                        Nothing -> P.fail $ "didn't found char from range " <> String.singleton from <> "-" <> String.singleton to
-                    -}
                     ch <- P.lookAhead $ P.anyChar
                     if (ch >= from) && (ch <= to) then
                         P.anyChar
@@ -74,6 +66,7 @@ parseRule set f at rule =
                 -- =<< P.anyChar
         CharRule Any -> qleaf rule P.anyChar
         Sequence rules ->
+            -- TODO: custom implementation with failure tracking
             qnode rule $ forWithIndex rules $ \idx -> parseRule set f $ InSequence idx
         Choice rules ->
             qnode rule $ Array.singleton <$>
@@ -179,8 +172,8 @@ _choice toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
                                 choiceIter (failure # Array.snoc results) (idx + 1) tail
                         , onSuccess :
                             \_ -> do
-                                applied <- P.assertConsume head
-                                pure applied
+                                appliedHead <- P.assertConsume head
+                                pure appliedHead
                         }
                 Nothing -> do
                     curState <- _state
@@ -210,11 +203,15 @@ _choice' toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
 
 _repSep :: forall a. P (AST a) -> P (AST a) -> P (Array (AST a))
 _repSep rep sep = do
+    let _ = Debug.spy "start" unit
     rep # _tryAhead
         { onFail : pure <<< Array.singleton
         , onSuccess :
             \repSuccess -> do
+                let _ = Debug.spy "first success" unit
+                _ <- _ensureNotEOI
                 _ <- P.assertConsume rep
+                let _ = Debug.spy "first consume success" unit
                 repSepIter (Array.singleton repSuccess) 1
         }
     where
@@ -222,50 +219,29 @@ _repSep rep sep = do
         repSepIter results index = do
             sep # _tryAhead
                 { onFail :
-                    \sepFailure -> pure (sepFailure # Array.snoc results)
+                    \sepFailure -> pure $ Debug.spy ("fail sep at " <> show index) (sepFailure # Array.snoc results)
                 , onSuccess : \sepSuccess -> do
+                    let _ = Debug.spy "sep success" unit
+                    _ <- _ensureNotEOI
                     _ <- P.assertConsume sep -- do not consume if next rep fails?
+                    let _ = Debug.spy "sep consume success" unit
                     rep # _tryAhead
                         { onFail :
                             \repFailure ->
-                                pure (sepSuccess # Array.snoc (repFailure # Array.snoc results))
+                                pure $ Debug.spy ("fail rep at " <> show index) (sepSuccess # Array.snoc (repFailure # Array.snoc results))
                         , onSuccess :
                             \repSuccess -> do
-                                _ <- P.assertConsume rep -- do not consume if next rep fails?
+                                let _ = Debug.spy "rep success" unit
+                                _ <- rep -- do not consume if next rep fails?
+                                let _ = Debug.spy "rep consume success"
                                 repSepIter (repSuccess # Array.snoc (sepSuccess # Array.snoc results)) $ index + 1
                         }
 
                 }
-            {-
-            let
-                stopWith lastFailure =
-                    pure (lastFailure # Array.snoc results)
-            case mbRep of
-                Just (FailLeaf failure) ->
-                    stopWith $ FailLeaf failure
-                Just (FailNode failure children) ->
-                    stopWith $ FailNode failure children
-                Just repSuccess -> do
-                    repApplied <- P.assertConsume rep
-                    mbSep <- P.optionMaybe $ P.tryAhead sep
-                    case mbSep of
-                        Just (FailLeaf failure) ->
-                            stopWith Nil
-                            -- stopWith $ FailLeaf failure
-                        Just (FailNode failure children) ->
-                            stopWith Nil
-                            -- stopWith $ FailNode failure children
-                        Just sepSuccess -> do
-                            _ <- P.assertConsume sep
-                            repSepIter (sepSuccess # Array.snoc (repSuccess # Array.snoc results)) $ index + 1
-                        Nothing ->
-                            stopWith Nil
-                Nothing ->
-                    stopWith Nil
-            -}
 
 
-
+_ensureNotEOI :: P Unit
+_ensureNotEOI = P.eof
 
 
 _rollback :: PosString -> P Unit
