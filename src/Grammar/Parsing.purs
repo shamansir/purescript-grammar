@@ -241,7 +241,12 @@ _repSep rep sep = do
 
 
 _ensureNotEOI :: P Unit
-_ensureNotEOI = P.eof
+_ensureNotEOI = Parser $
+    \state ->
+        if (String.length state.substring == 0) then
+            Left { error : "EOI", pos : state.position }
+        else
+            Right { result : unit, suffix : state }
 
 
 _rollback :: PosString -> P Unit
