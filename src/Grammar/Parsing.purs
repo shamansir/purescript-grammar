@@ -138,15 +138,26 @@ _makeError substr =
         qfoundchar = String.take 1 >>> String.charAt 0 >>> maybe G.eoi G.found -- FIXME: EOL/EOF
 
 
-_tryAhead :: forall a b. { onFail :: AST a -> P b, onSuccess :: AST a -> P b } -> P (AST a) -> P b
-_tryAhead spec p = (P.tryAhead p # P.optionMaybe) >>= _mbHelper spec
+type Handlers_ a b = { onFail :: AST a -> P b, onSuccess :: AST a -> P b }
 
 
-_try :: forall a b. { onFail :: AST a -> P b, onSuccess :: AST a -> P b } -> P (AST a) -> P b
-_try spec p = (P.try p # P.optionMaybe) >>= _mbHelper spec
+-- _tryAhead :: forall a b. Handlers_ a b -> P (AST a) -> P b
+-- _tryAhead spec p = (P.tryAhead p # P.optionMaybe) >>= _mbHelper spec
 
 
-_mbHelper :: forall a b. { onFail :: AST a -> P b, onSuccess :: AST a -> P b } -> Maybe (AST a) -> P b
+-- _try :: forall a b. Handlers_ a b -> P (AST a) -> P b
+-- _try spec p = (P.try p # P.optionMaybe) >>= _mbHelper spec
+
+
+_tryAhead :: forall a b. Handlers_ a b -> P (AST a) -> P b
+_tryAhead = _safeTry
+
+
+_try :: forall a b. Handlers_ a b -> P (AST a) -> P b
+_try = _safeTry
+
+
+_mbHelper :: forall a b. Handlers_ a b -> Maybe (AST a) -> P b
 _mbHelper spec =
     case _ of
         Just (FailLeaf failure) -> do
@@ -170,10 +181,7 @@ _choice toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
                         { onFail :
                             \failure -> do
                                 choiceIter (failure # Array.snoc results) (idx + 1) tail
-                        , onSuccess :
-                            \_ -> do
-                                appliedHead <- P.assertConsume head
-                                pure appliedHead
+                        , onSuccess : pure
                         }
                 Nothing -> do
                     curState <- _state
@@ -188,11 +196,9 @@ _choice' toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
         choiceIter results idx items =
             case Array.uncons items of
                 Just { head, tail } -> do
-                    stateBefore <- _state
                     head # _try
                         { onFail :
                             \failure -> do
-                                _rollback stateBefore
                                 choiceIter (failure # Array.snoc results) (idx + 1) tail
                         , onSuccess : pure
                         }
@@ -209,44 +215,128 @@ _repSep rep sep = do
         , onSuccess :
             \repSuccess -> do
                 let _ = Debug.spy "first success" unit
-                _ <- _ensureNotEOI
-                _ <- P.assertConsume rep
-                let _ = Debug.spy "first consume success" unit
+                -- _ <- _ensureNotEOI
+                -- _ <- P.assertConsume rep
+                state <- _state
+                let _ = Debug.spy "state after sep success" state
                 repSepIter (Array.singleton repSuccess) 1
         }
     where
         repSepIter :: Array (AST a) -> Int -> P (Array (AST a))
         repSepIter results index = do
             sep # _tryAhead
+                { onFail : \sepFailure -> pure $ Debug.spy ("fail sep at " <> show index) (sepFailure # Array.snoc results)
+                , onSuccess :
+                    \sepSuccess -> do
+                        state <- _state
+                        let _ = Debug.spy "state after sep success" state
+                        rep # _tryAhead
+                            { onFail :
+                                \repFailure ->
+                                    pure $ Debug.spy ("fail rep at " <> show index) (sepSuccess # Array.snoc (repFailure # Array.snoc results))
+                            , onSuccess :
+                                \repSuccess -> do
+                                    let _ = Debug.spy "rep success" unit
+                                    repSepIter (repSuccess # Array.snoc (sepSuccess # Array.snoc results)) $ index + 1
+                                    -- pure (repSuccess # Array.snoc (sepSuccess # Array.snoc results))
+                            }
+                        -- pure (sepSuccess # Array.snoc (Nil # Array.snoc results))
+                }
+            -- pure results
+            {-
+            sep # _tryAhead
                 { onFail :
                     \sepFailure -> pure $ Debug.spy ("fail sep at " <> show index) (sepFailure # Array.snoc results)
                 , onSuccess : \sepSuccess -> do
                     let _ = Debug.spy "sep success" unit
-                    _ <- _ensureNotEOI
-                    _ <- P.assertConsume sep -- do not consume if next rep fails?
-                    let _ = Debug.spy "sep consume success" unit
-                    rep # _tryAhead
-                        { onFail :
-                            \repFailure ->
-                                pure $ Debug.spy ("fail rep at " <> show index) (sepSuccess # Array.snoc (repFailure # Array.snoc results))
-                        , onSuccess :
-                            \repSuccess -> do
-                                let _ = Debug.spy "rep success" unit
-                                _ <- rep -- do not consume if next rep fails?
-                                let _ = Debug.spy "rep consume success"
-                                repSepIter (repSuccess # Array.snoc (sepSuccess # Array.snoc results)) $ index + 1
-                        }
+                    -- isEOI <- _isEOI
+                    -- let _ = Debug.spy "is EOI" isEOI
+                    if (true) then do
+                        let _ = Debug.spy "before assert consume" unit
+                        -- FIXME: `assertConsume` does not assume empty consume as sucessful one
+                        -- _ <- P.assertConsume sep -- do not consume if next rep fails?
+                        let _ = Debug.spy "sep consume success" unit
+                        rep # _tryAhead
+                            { onFail :
+                                \repFailure ->
+                                    pure $ Debug.spy ("fail rep at " <> show index) (sepSuccess # Array.snoc (repFailure # Array.snoc results))
+                            , onSuccess :
+                                \repSuccess -> do
+                                    let _ = Debug.spy "rep success" unit
+                                    -- isEOI <- _isEOI
+                                    -- let _ = Debug.spy "is EOI" isEOI
+                                    if (true) then do
+                                        -- _ <- P.assertConsume rep -- do not consume if next rep fails?
+                                        let _ = Debug.spy "rep consume success"
+                                        repSepIter (repSuccess # Array.snoc (sepSuccess # Array.snoc results)) $ index + 1
+                                    else
+                                        pure $ Debug.spy ("EOI at " <> show index) (sepSuccess # Array.snoc (Nil # Array.snoc results))
+                            }
+                    else
+                        pure $ Debug.spy ("EOI at " <> show index) (sepSuccess # Array.snoc (Nil # Array.snoc results))
+            -}
 
-                }
+
+_safeTry :: forall a b. Handlers_ a b -> P (AST a) -> P b
+_safeTry spec what = do
+    stateBefore <- _state
+    let _ = Debug.spy "state before try" stateBefore
+    result <- _ensureNotEOIWith $ P.optionMaybe $ what
+    stateAfter <- _state
+    let _ = Debug.spy "state after try" stateAfter
+    result # _mbHelper
+        { onSuccess : spec.onSuccess
+        , onFail : \res -> do
+            _ <- _rollback stateBefore
+            spec.onFail res
+        }
 
 
-_ensureNotEOI :: P Unit
+{-
+_safeTry' :: forall a. P (AST a) -> P (AST a)
+_safeTry' what = do
+    stateBefore <- _state
+    result <- P.optionMaybe $ what
+    result # _mbHelper
+        { onSuccess : pure
+        , onFail : \res -> do
+            _ <- _rollback stateBefore
+            pure res
+        }
+-}
+
+
+_ensureNotEOIWith :: forall a. P (Maybe a) -> P (Maybe a)
+_ensureNotEOIWith p = do
+    state <- _state
+    if (String.length state.substring == 0) then do
+        let _ = Debug.spy "EOI" unit
+        -- pure Nothing
+        P.fail "EOI"
+    else do
+        res <- p
+        pure res
+        -- nextState <- _state
+        -- if (String.length nextState.substring == 0) then
+        --     Left { error : "EOI", pos : state.position }
+        -- else
+        --     Right { result : res, suffix : state }
+
+
+{-
 _ensureNotEOI = Parser $
     \state ->
         if (String.length state.substring == 0) then
             Left { error : "EOI", pos : state.position }
         else
             Right { result : unit, suffix : state }
+-}
+
+
+_isEOI :: P Boolean
+_isEOI = Parser $
+    \state ->
+        Right { result : String.length state.substring == 0, suffix : state }
 
 
 _rollback :: PosString -> P Unit
