@@ -5,7 +5,7 @@ import Prelude
 import Debug as Debug
 
 import Grammar (Grammar, AST(..), Rule(..), CharRule(..), At(..), CharX(..), Error(..), Failure, RuleName, RuleSet, Range)
-import Grammar (main, find, findIn, set, toChar, toRepr, found, expected, eoi) as G
+import Grammar (main, find, findIn, set, toChar, toRepr, found, expected, eoi, At(..)) as G
 
 import Control.Lazy (defer)
 
@@ -84,7 +84,7 @@ parseRule set f at rule =
                 psep = parseRule set f SepOf sep
             in
                 -- qnode $ Array.fromFoldable <$> P.sepEndBy prep psep
-                qnode rule $ _repSep prep psep
+                qnode rule $ _repSep rep sep prep psep
         Placeholder ->
             qleaf rule $ P.string "???"
     where
@@ -114,11 +114,15 @@ parseRule set f at rule =
             Placeholder -> 3
             _ -> 0
         failureFromState :: PosString -> Failure
-        failureFromState state = { position : state.position, rule, at, error : _makeError state.substring rule }
+        failureFromState = _failureFromState at rule
         mkLeafFailure :: PosString -> Rule -> AST a
         mkLeafFailure state = const $ FailLeaf $ failureFromState state
         mkNodeFailure :: PosString -> Rule -> AST a -- This should never occur when error-saving technique is used, since all parsers in the nodes formally succeed (just signalizing the fail with `Fail` constructor of `AST` datatype)
         mkNodeFailure state = const $ FailNode (failureFromState state) []
+
+
+_failureFromState :: At -> Rule -> PosString -> Failure -- Could be `P Failure``
+_failureFromState at rule state = { position : state.position, rule, at, error : _makeError state.substring rule }
 
 
 _makeError :: String -> Rule -> Error
@@ -138,7 +142,7 @@ _makeError substr =
         qfoundchar = String.take 1 >>> String.charAt 0 >>> maybe G.eoi G.found -- FIXME: EOL/EOF
 
 
-type Handlers_ a b = { onFail :: AST a -> P b, onSuccess :: AST a -> P b }
+type Handlers_ a b = { onEOI :: PosString -> AST a, onFail :: AST a -> P b, onSuccess :: AST a -> P b }
 
 
 -- _tryAhead :: forall a b. Handlers_ a b -> P (AST a) -> P b
@@ -178,7 +182,8 @@ _choice toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
             case Array.uncons items of
                 Just { head, tail } -> do
                     head # _tryAhead
-                        { onFail :
+                        { onEOI : const Nil -- FIXME: TODO
+                        , onFail :
                             \failure -> do
                                 choiceIter (failure # Array.snoc results) (idx + 1) tail
                         , onSuccess : pure
@@ -197,7 +202,8 @@ _choice' toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
             case Array.uncons items of
                 Just { head, tail } -> do
                     head # _try
-                        { onFail :
+                        { onEOI : const Nil -- FIXME: TODO
+                        , onFail :
                             \failure -> do
                                 choiceIter (failure # Array.snoc results) (idx + 1) tail
                         , onSuccess : pure
@@ -207,10 +213,11 @@ _choice' toFailure = choiceIter [] 0 -- Array.scanl ??? FIXME
                     pure $ FailNode (toFailure curState) results
 
 
-_repSep :: forall a. P (AST a) -> P (AST a) -> P (Array (AST a))
-_repSep rep sep = do
+_repSep :: forall a. Rule -> Rule -> P (AST a) -> P (AST a) -> P (Array (AST a))
+_repSep reprule seprule rep sep = do
     rep # _tryAhead
-        { onFail : pure <<< Array.singleton
+        { onEOI : FailLeaf <<< _failureFromState G.RepOf reprule
+        , onFail : pure <<< Array.singleton
         , onSuccess :
             \repSuccess ->
                 repSepIter (Array.singleton repSuccess) 1
@@ -219,11 +226,13 @@ _repSep rep sep = do
         repSepIter :: Array (AST a) -> Int -> P (Array (AST a))
         repSepIter results index = do
             sep # _tryAhead
-                { onFail : \sepFailure -> pure (sepFailure # Array.snoc results)
+                { onEOI : FailLeaf <<< _failureFromState G.SepOf seprule -- FIXME: doesn't pass EOI inside
+                , onFail : \sepFailure -> pure (sepFailure # Array.snoc results)
                 , onSuccess :
                     \sepSuccess -> do
                         rep # _tryAhead
-                            { onFail :
+                            { onEOI : FailLeaf <<< _failureFromState G.RepOf reprule
+                            , onFail :
                                 \repFailure ->
                                     pure (sepSuccess # Array.snoc (repFailure # Array.snoc results))
                             , onSuccess :
@@ -236,20 +245,21 @@ _repSep rep sep = do
 _safeTry :: forall a b. Handlers_ a b -> P (AST a) -> P b
 _safeTry spec what = do
     stateBefore <- _state
-    result <- _ensureNotEOIWith $ P.optionMaybe $ what
+    result <- _ensureNotEOIWith spec.onEOI $ P.optionMaybe $ what
     result # _mbHelper
-        { onSuccess : spec.onSuccess
+        { onEOI : spec.onEOI
+        , onSuccess : spec.onSuccess
         , onFail : \res -> do
             _ <- _rollback stateBefore
             spec.onFail res
         }
 
 
-_ensureNotEOIWith :: forall a. P (Maybe a) -> P (Maybe a)
-_ensureNotEOIWith p = do
+_ensureNotEOIWith :: forall a. (PosString -> a)-> P (Maybe a) -> P (Maybe a)
+_ensureNotEOIWith fallback p = do
     state <- _state
     if (String.length state.substring == 0) then do
-        pure Nothing -- FIXME: fail with EOI Error
+        pure $ Just $ fallback state
     else p >>= pure
 
 

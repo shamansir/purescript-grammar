@@ -42,7 +42,6 @@ main = launchAff_ $ runSpec [consoleReporter] do
       mkerr = mkParseError
       mkserr = mkSParseError
 
-  {-
     describe "parsing grammars (inline)" $ do
       it "should parse simple grammar (string)" $
         grm "main :- \"foobar\".\n" "main :- \"foobar\".\n"
@@ -251,25 +250,24 @@ main = launchAff_ $ runSpec [consoleReporter] do
           --        "< None of choices matched input :: <main> choice @0 | < Expected 'f', but found 'x' :: ch:0 char @0 > : < Expected 'o', but found 'x' :: ch:1 char @0 > : < Expected 'o', but found 'x' :: ch:2 char @0 > >"
           -- ...or: "( 0 <main> choice 0-0 | < Expected 'f', but found 'x' :: rule:f char @0 > : < Expected 'o', but found 'x' :: rule:f char @0 > : < Expected 'o', but found 'x' :: rule:f char @0 > )"
           -- it seems the choice failure is a single child of `Node` in this case
-    itOnly "parsing rep/sep" $
-        withgrm "f,o,o"
-          """main :- repSep(fo,',').
+      it "parsing rep/sep" $
+          withgrm "f,o,o"
+            """main :- repSep(fo,',').
+            fo :- ('f'|'o').
+            """
+            "( 0 <main> repsep 0-5 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 sep char 1-2 ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 sep char 3-4 ) : ( 0 rule:fo choice 4-5 | ( 0 ch:1 char 4-5 ) ) : < Expected ',', but found end-of-input :: sep char @5 > )"
+      it "parsing rep/sep fails when there's hanging separator" $
+          withgrm "f,o,x"
+            """main :- repSep(fo,',').
+            fo :- ('f'|'o').
+            """
+            "( 0 <main> repsep 0-4 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 sep char 1-2 ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 sep char 3-4 ) : ( 0 rule:fo choice 4-4 | < None of choices matched input :: rule:fo choice @4 | < Expected 'f', but found 'x' :: ch:0 char @4 > : < Expected 'o', but found 'x' :: ch:1 char @4 > > ) : < Expected ',', but found 'x' :: sep char @4 > )"
+      it "parsing rep/sep 2" $
+        withgrm "foo"
+          """main :- repSep(fo,"").
           fo :- ('f'|'o').
           """
-          "( 0 <main> repsep 0-5 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 sep char 1-2 ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 sep char 3-4 ) : ( 0 rule:fo choice 4-5 | ( 0 ch:1 char 4-5 ) ) : < Expected ',', but found end-of-input :: sep char @5 > )"
-    itOnly "parsing rep/sep fails when there's hanging separator" $
-        withgrm "f,o,x"
-          """main :- repSep(fo,',').
-          fo :- ('f'|'o').
-          """
-          "( 0 <main> repsep 0-5 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 sep char 1-2 ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 sep char 3-4 ) : ( 0 rule:fo choice 4-5 | ( 0 ch:1 char 4-5 ) ) : < Expected ',', but found end-of-input :: sep char @5 > )"
-      -}
-    itOnly "parsing rep/sep 2" $
-      withgrm "foo"
-        """main :- repSep(fo,"").
-        fo :- ('f'|'o').
-        """
-        "( 0 <main> repsep 0-3 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 rule:fo choice 1-2 | ( 0 ch:1 char 1-2 ) ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) )"
+          "( 0 <main> repsep 0-3 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 sep text 1-1 ) : ( 0 rule:fo choice 1-2 | ( 0 ch:1 char 1-2 ) ) : ( 0 sep text 2-2 ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : < Expected '', but found end-of-input :: sep text @3 > )"
       {-
       it "parsing rep/sep when empty" $
         withgrm ""
