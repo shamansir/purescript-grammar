@@ -128,7 +128,7 @@ _failureFromState at rule state = { position : state.position, rule, at, error :
 _makeError :: String -> Rule -> Error
 _makeError substr =
     case _ of
-        Text expected -> TextError { expected : G.expected expected, found : G.found $ String.take (String.length expected) substr }
+        Text expected -> TextError { expected : G.expected expected, found : qfoundstr expected }
         CharRule (Single chx) -> CharacterError { expected : G.expected chx, found : qfoundchar substr }
         CharRule (Not chx) -> NegCharacterError { notExpected : G.expected chx, found : qfoundchar substr }
         CharRule (Range from to) -> CharacterRangeError { from : G.expected from, to : G.expected to, found : qfoundchar substr }
@@ -139,6 +139,8 @@ _makeError substr =
         RepSep _ _ -> RepSepError { occurence : 0 } -- FIXME
         Placeholder -> PlaceholderError
     where
+        qfoundstr expected =
+            if String.length substr > 0 then G.found $ String.take (String.length expected) substr else G.eoi
         qfoundchar = String.take 1 >>> String.charAt 0 >>> maybe G.eoi G.found -- FIXME: EOL/EOF
 
 

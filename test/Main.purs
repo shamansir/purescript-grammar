@@ -41,7 +41,6 @@ main = launchAff_ $ runSpec [consoleReporter] do
       withgrmfile = parsesWithGrammarFromFile
       mkerr = mkParseError
       mkserr = mkSParseError
-
     describe "parsing grammars (inline)" $ do
       it "should parse simple grammar (string)" $
         grm "main :- \"foobar\".\n" "main :- \"foobar\".\n"
@@ -268,11 +267,10 @@ main = launchAff_ $ runSpec [consoleReporter] do
           fo :- ('f'|'o').
           """
           "( 0 <main> repsep 0-3 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 sep text 1-1 ) : ( 0 rule:fo choice 1-2 | ( 0 ch:1 char 1-2 ) ) : ( 0 sep text 2-2 ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : < Expected '', but found end-of-input :: sep text @3 > )"
-      {-
       it "parsing rep/sep when empty" $
         withgrm ""
           """main :- repSep(" ","\n")."""
-          "( 0 <main> repsep 0-0 | ∅ )"
+          "( 0 <main> repsep 0-0 | < Expected ' ', but found end-of-input :: rep text @0 > )" {-
       it "parsing rep/sep when empty 2" $
         withgrm "\n"
           """main :- repSep(" ","\n")."""
