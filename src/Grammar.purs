@@ -5,11 +5,13 @@ import Prelude
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Map (Map)
 import Data.Map (empty, lookup, toUnfoldable) as Map
+import Data.FunctorWithIndex (mapWithIndex)
 import Data.String (joinWith) as String
 import Data.String.CodeUnits (singleton) as String
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.Tuple (uncurry) as Tuple
+import Data.Newtype (class Newtype, wrap, unwrap)
 
 
 type RuleSet = Map RuleName Rule
@@ -51,29 +53,49 @@ data At
     | ChoiceOf Int
     | RepOf
     | SepOf
+    | Nil
 
 
+{-
 type Match =
-    { range :: Range -- in
-    , at :: At -- parent
+    { range :: Range
+    -- , parent :: { rule :: Rule, location :: At }
+    , location :: At
     , rule :: Rule
     }
 
 
 type Failure =
     { position :: Int
-    , at :: At
-    , rule :: Rule
+    -- , parent :: { rule :: Rule, location :: At }
+    , location :: At
     , error :: Error
     }
+-}
 
 
-data AST a
-    = Nil
-    | Leaf Match a
-    | Node Match a (Array (AST a))
-    | FailLeaf Failure
-    | FailNode Failure (Array (AST a)) -- Array Failure?
+data Tree n -- TODO: use Yoga.Tree implementation
+    = Leaf n
+    | Node n (Array (Tree n))
+
+
+type Position = Int
+
+
+data Attempt a
+    = Match Range a
+    | Fail Position Error
+
+
+type ASTNode a =
+    Tree { rule :: Rule, result :: Attempt a }
+
+
+newtype AST a =
+    AST (ASTNode a)
+
+
+derive instance Newtype (AST a) _
 
 
 data Error
@@ -89,6 +111,7 @@ data Error
     | SequenceError {} -- { errors :: Array Error }
     | ChoiceError {} -- { errors :: Array Error }
     | PlaceholderError
+    | EndOfInput
     | Unknown
 
 
@@ -201,42 +224,62 @@ instance Show At where
         ChoiceOf idx -> "ch:" <> show idx
         RepOf -> "rep"
         SepOf -> "sep"
-
+        Nil -> "-"
 
 
 instance Show a => Show (AST a) where
-    show = case _ of
-        Nil -> "-"
-        Node match a [] ->
-            "( " <> show a <> " " <> smatch match <> " | " <> "∅" <> " )"
-        Node match a children ->
-            "( " <> show a <> " " <> smatch match <> " | " <> String.joinWith " : " (show <$> children) <> " )"
-        Leaf match a ->
-            "( " <> show a <> " " <> smatch match <> " )"
-        FailLeaf failure ->
-            "< " <> sfailure failure <> " >"
-        FailNode failure [] ->
-            "< " <> sfailure failure <> " | " <> "∅" <> " >"
-        FailNode failure children ->
-            "< " <> sfailure failure <> " | " <> String.joinWith " : " (show <$> children) <> " >"
+    show = showTree Main <<< unwrap
         where
 
-            ruleType = case _ of
-                Sequence _ -> "seqnc"
-                Choice _ -> "choice"
-                Ref _ name -> "ref:" <> name
-                Text _ -> "text"
-                CharRule r -> case r of
-                    Single _ -> "char"
-                    Any -> "any"
-                    Not _ -> "not-char"
-                    Range _ _ -> "char-range"
-                RepSep _ _ -> "repsep"
-                Placeholder -> "-"
-            smatch { at, range, rule } =
-                show at <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end
-            sfailure { error, at, rule, position } =
-                show error <> " :: " <> show at <> " " <> ruleType rule <> " @" <> show position
+        showTree at =
+            case _ of
+                Leaf { rule, result } ->
+                    case result of
+                        Match range a ->
+                            "( " <> show a <> " " <> smatch { at, range, rule } <> " )"
+                        Fail position error ->
+                            "< " <> sfailure { error, at, rule, position } <> " >"
+                Node { rule, result } [] ->
+                    case result of
+                        Match range a ->
+                            "( " <> show a <> " " <> smatch { at, range, rule } <> " | " <> "∅" <> " )"
+                        Fail position error ->
+                            "< " <> sfailure { error, at, rule, position } <> " | " <> "∅" <> " >"
+                Node { rule, result } children ->
+                    case result of
+                        Match range a ->
+                            "( " <> show a <> " " <> smatch { at, range, rule } <> " | " <> String.joinWith " : " (mapWithIndex (showTree <<< flip locate rule) children) <> " )"
+                        Fail position error ->
+                            "< " <> sfailure { error, at, rule, position } <> " | " <> String.joinWith " : " (mapWithIndex (showTree <<< flip locate rule) children) <> " )"
+        ruleType = case _ of
+            Sequence _ -> "seqnc"
+            Choice _ -> "choice"
+            Ref _ name -> "ref:" <> name
+            Text _ -> "text"
+            CharRule r -> case r of
+                Single _ -> "char"
+                Any -> "any"
+                Not _ -> "not-char"
+                Range _ _ -> "char-range"
+            RepSep _ _ -> "repsep"
+            Placeholder -> "-"
+        smatch { at, range, rule } =
+            show at <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end
+        sfailure { error, at, rule, position } =
+            show error <> " :: " <> show at <> " " <> ruleType rule <> " @" <> show position
+        locate index =
+            case _ of
+                Sequence _ -> InSequence index
+                Choice _ -> ChoiceOf index
+                RepSep _ _ -> case index of
+                    0 -> RepOf
+                    1 -> SepOf
+                    _ -> Nil  -- shouldn't happen
+                Ref _ rule -> At rule
+                Text _ -> Nil -- shouldn't happen
+                CharRule _ -> Nil  -- shouldn't happen
+                Placeholder -> Nil  -- shouldn't happen
+
 
 
 instance Show Error where
@@ -252,6 +295,7 @@ instance Show Error where
         -- RepeatError err -> "rep TODO"
         -- SeparatorError err -> "sep TODO"
         RepSepError _ -> "repsep TODO"
+        EndOfInput -> "end of input"
         PlaceholderError -> "PLC"
         Unknown -> "UNK"
 

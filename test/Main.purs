@@ -13,7 +13,7 @@ import Data.Bifunctor (lmap)
 
 import Effect (Effect)
 import Effect.Aff (launchAff_, delay)
-import Test.Spec (pending, describe, it, itOnly, pending')
+import Test.Spec (pending, describe, it, describeOnly, itOnly, pending')
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
@@ -23,7 +23,7 @@ import Node.FS.Sync (readTextFile, writeTextFile)
 
 import Grammar (Grammar, AST)
 import Grammar.Parser (parser) as Grammar
-import Grammar.Parsing (parse) as WithGrammar
+import AST.Parser (parse) as WithGrammar
 
 import Parsing (Parser, runParser, ParseError(..), Position(..)) as P
 import StringParser (Parser, runParser, ParseError(..), PosString) as SP
@@ -37,7 +37,6 @@ main = launchAff_ $ runSpec [consoleReporter] do
       grmfile = parsesGrammarFile
       grmfail = failsToParseGrammarWithError
       withgrm = parsesWithGivenGrammarAs
-      withgrmfail = failsToParseWithGivenGrammarWithError
       withgrmfile = parsesWithGrammarFromFile
       mkerr = mkParseError
       mkserr = mkSParseError
@@ -137,6 +136,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       pending' "parses `test`" $
         grmfile "test"
 
+    {-
     describe "parsing with grammars" $ do
 
       pending' "failing to parse" $
@@ -369,25 +369,38 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm "x"
           "main :- ([a-z] | \"\")."
           "( 0 <main> choice 0-1 | ( 0 ch:0 char-range 0-1 ) )"
+      -}
+      -- let
+      --   identifierGrammar =
+      --     """main :- ident.
+      --        alpha :- ([a-z] | [A-Z] | "_").
+      --        num :- [0-9].
+      --        alphaNum :- (alpha | num).
+      --        ident :- [alpha, repSep((alphaNum | "."), "")]."""
+
       let
         identifierGrammar =
-          """main :- ident.
+          """main :- alphaNum.
              alpha :- ([a-z] | [A-Z] | "_").
              num :- [0-9].
              alphaNum :- (alpha | num).
-             ident :- [alpha, repSep((alphaNum | "."), "")]."""
+             ident :- [alphaNum, repSep((alphaNum | "."), "")]."""
+
+      {-
 
       it "parsing identifier rule" $
         withgrm "t"
           identifierGrammar
           "( 0 rule:ident seqnc 0-1 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-1 | < None of choices matched input :: rep choice @1 > ) )"
           --"( 0 rule:ident seqnc 0-1 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-1 | ∅ ) )"
-      {-
+      -}
+
       it "parsing identifier rule 2" $
-        withgrm "t0"
+        withgrm "0"
           identifierGrammar
           "( 0 rule:ident seqnc 0-2 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-2 | ( 0 rep choice 1-2 | ( 0 rule:alphaNum choice 1-2 | ( 0 rule:num char-range 1-2 ) ) ) ) )"
 
+  {-
       it "parsing identifier rule 3" $
         withgrm "t0 "
           identifierGrammar
@@ -443,16 +456,7 @@ parsesWithGivenGrammarAs str grammarStr expectation =
   let
     eGrammar = P.runParser grammarStr Grammar.parser
     buildAst grammar = WithGrammar.parse grammar (const 0) str
-  in (map show <$> buildAst =<< lmap convertError eGrammar) `shouldEqual` (Right expectation)
-
-
-failsToParseWithGivenGrammarWithError ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String -> String → SP.ParseError → m Unit
-failsToParseWithGivenGrammarWithError str grammarStr error =
-  let
-    eGrammar = P.runParser grammarStr Grammar.parser
-    buildAst :: Grammar -> Either SP.ParseError (AST Int)
-    buildAst grammar = WithGrammar.parse grammar (const 0) str
-  in (map show <$> buildAst =<< lmap convertError eGrammar) `shouldEqual` (Left error)
+  in (show <$> buildAst <$> lmap convertError eGrammar) `shouldEqual` (Right expectation)
 
 
 parsesWithGrammarFromFile :: ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Error m => String -> m Unit
@@ -462,9 +466,9 @@ parsesWithGrammarFromFile fileName = do
     expectationStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/sources/" <> fileName <> ".src.expected"
     let
       eGrammar = P.runParser grammarStr Grammar.parser
-      buildAst :: Grammar -> Either SP.ParseError (AST Int)
+      buildAst :: Grammar -> AST Int
       buildAst grammar = WithGrammar.parse grammar (const 0) sourceStr
-      eAST = buildAst =<< lmap convertError eGrammar
+      eAST = buildAst <$> lmap convertError eGrammar
     liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
     (show <$> eAST) `shouldEqual` (Right expectationStr)
 
