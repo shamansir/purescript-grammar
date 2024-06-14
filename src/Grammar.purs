@@ -28,6 +28,7 @@ data Rule
     | CharRule CharRule
     | RepSep Rule Rule
     | Placeholder
+    | None
 
 
 data CharRule
@@ -206,6 +207,7 @@ instance Show Rule where
             -- TODO: Some operator for RepSep
             "repSep(" <> show repRule <> "," <> show sepRule <> ")"
         Placeholder -> "???"
+        None -> "x"
 
 
 instance Show Grammar where
@@ -263,6 +265,7 @@ instance Show a => Show (AST a) where
                 Range _ _ -> "char-range"
             RepSep _ _ -> "repsep"
             Placeholder -> "-"
+            None -> "x"
         smatch { at, range, rule } =
             show at <> " " <> ruleType rule <> " " <> show range.start <> "-" <> show range.end
         sfailure { error, at, rule, position } =
@@ -279,6 +282,7 @@ instance Show a => Show (AST a) where
                 Text _ -> Nil -- shouldn't happen
                 CharRule _ -> Nil  -- shouldn't happen
                 Placeholder -> Nil  -- shouldn't happen
+                None -> Nil  -- shouldn't happen
 
 
 
