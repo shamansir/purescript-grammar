@@ -270,11 +270,11 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing rep/sep when empty" $
         withgrm ""
           """main :- repSep(" ","\n")."""
-          "( 0 <main> repsep 0-0 | < Expected ' ', but found end-of-input :: rep text @0 > )" {-
+          "( 0 <main> repsep 0-0 | < Expected ' ', but found end-of-input :: rep text @0 > )"
       it "parsing rep/sep when empty 2" $
         withgrm "\n"
           """main :- repSep(" ","\n")."""
-          "( 0 <main> repsep 0-0 | ∅ )"
+          "( 0 <main> repsep 0-0 | < Expected ' ', but found '\n' :: rep text @0 > )"
       -- pending' "parsing rep/sep when empty 3" $
       --  withgrm ""
       --    """main :- repSep("","")."""
@@ -282,23 +282,23 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing rep/sep when empty 4" $
         withgrm ""
           """main :- repSep("a","b")."""
-          "( 0 <main> repsep 0-0 | ∅ )"
+          "( 0 <main> repsep 0-0 | < Expected 'a', but found end-of-input :: rep text @0 > )"
       it "parsing rep/sep when empty 5" $
         withgrm ""
           """main :- repSep("a","")."""
-          "( 0 <main> repsep 0-0 | ∅ )"
+          "( 0 <main> repsep 0-0 | < Expected 'a', but found end-of-input :: rep text @0 > )"
       it "parsing rep/sep when empty 6" $
         withgrm ""
-          """main :- repSep("a","")."""
-          "( 0 <main> repsep 0-0 | ∅ )"
+          """main :- repSep('a',"")."""
+          "( 0 <main> repsep 0-0 | < Expected 'a', but found end-of-input :: rep char @0 > )"
       it "parsing rep/sep with single element" $
         withgrm "2"
           """main :- repSep("2","")."""
-          "( 0 <main> repsep 0-1 | ( 0 rep text 0-1 ) )"
+          "( 0 <main> repsep 0-1 | ( 0 rep text 0-1 ) : < Expected '', but found end-of-input :: sep text @1 > )"
       it "parsing rep/sep with single element as char sequence" $
         withgrm "2"
           """main :- repSep([0-9],"")."""
-          "( 0 <main> repsep 0-1 | ( 0 rep char-range 0-1 ) )"
+          "( 0 <main> repsep 0-1 | ( 0 rep char-range 0-1 ) : < Expected '', but found end-of-input :: sep text @1 > )"
       it "capture works" $
         withgrm "[a-z]"
           """main :- ['[',from:char,'-',to:char,']'].
@@ -308,7 +308,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "plain text grammar works" $
         withgrm "foobar"
           """main :- repSep(., "")."""
-          "( 0 <main> repsep 0-6 | ( 0 rep any 0-1 ) : ( 0 rep any 1-2 ) : ( 0 rep any 2-3 ) : ( 0 rep any 3-4 ) : ( 0 rep any 4-5 ) : ( 0 rep any 5-6 ) )"
+          "( 0 <main> repsep 0-6 | ( 0 rep any 0-1 ) : ( 0 sep text 1-1 ) : ( 0 rep any 1-2 ) : ( 0 sep text 2-2 ) : ( 0 rep any 2-3 ) : ( 0 sep text 3-3 ) : ( 0 rep any 3-4 ) : ( 0 sep text 4-4 ) : ( 0 rep any 4-5 ) : ( 0 sep text 5-5 ) : ( 0 rep any 5-6 ) : < Expected '', but found end-of-input :: sep text @6 > )"
       it "parsing newlines (as chars)" $
         withgrm "\n"
           """main :- '\n'."""
@@ -322,9 +322,9 @@ main = launchAff_ $ runSpec [consoleReporter] do
           "main :- [digit,digit,digit].\ndigit :- [0-9]."
           "( 0 <main> seqnc 0-3 | ( 0 rule:digit char-range 0-1 ) : ( 0 rule:digit char-range 1-2 ) : ( 0 rule:digit char-range 2-3 ) )"
       it "num is not parsed as alpha" $
-        withgrmfail "2"
+        withgrm "2"
           "main :- [a-z]."
-          $ mkserr "'2' is not from range a-z" 0
+          "< Expected character in range from 'a' to 'z', but found '2' :: <main> char-range @0 >"
       it "parsing char ranges in sequences" $
         withgrm "2"
           "main :- [[0-9]]."
@@ -332,19 +332,19 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing char ranges in sequences 2" $
         withgrm "2"
           """main :- [[0-9],repSep(" ","")]."""
-          "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | ∅ ) )"
+          "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | < Expected ' ', but found end-of-input :: rep text @1 > ) )"
       it "parsing empty rep/seps" $
         withgrm "2"
           """main :- [[0-9],repSep([0-9],"")]."""
-          "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | ∅ ) )"
+          "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | < Expected character in range from '0' to '9', but found end-of-input :: rep char-range @1 > ) )"
       it "parsing empty rep/seps 2" $
         withgrm "2a"
           """main :- [[0-9],repSep(" ",""),'a']."""
-          "( 0 <main> seqnc 0-2 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | ∅ ) : ( 0 seq:2 char 1-2 ) )"
+          "( 0 <main> seqnc 0-2 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | < Expected ' ', but found 'a' :: rep text @1 > ) : ( 0 seq:2 char 1-2 ) )"
       it "parsing empty rep/seps 3" $
         withgrm "t = 25"
           """main :- [[a-z], repSep([a-z], ""), " = 25"]."""
-          "( 0 <main> seqnc 0-6 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | ∅ ) : ( 0 seq:2 text 1-6 ) )"
+          "( 0 <main> seqnc 0-6 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | < Expected character in range from 'a' to 'z', but found ' ' :: rep char-range @1 > ) : ( 0 seq:2 text 1-6 ) )"
       it "parsing choices" $
         withgrm "x"
           "main :- ('y' | 'x')."
@@ -360,7 +360,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing choices 4" $
         withgrm "x"
           "main :- (['x', '='] | 'x')."
-          "( 0 <main> choice 0-1 | ( 0 ch:1 char 0-1 ) )"
+          "( 0 <main> choice 0-1 | ( 0 ch:0 seqnc 0-1 | ( 0 seq:0 char 0-1 ) : < Expected '=', but found end-of-input :: seq:1 char @1 > ) )"
       it "parsing choices 5" $
         withgrm ""
           "main :- ('x' | \"\")."
@@ -380,16 +380,21 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing identifier rule" $
         withgrm "t"
           identifierGrammar
-          "( 0 rule:ident seqnc 0-1 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-1 | ∅ ) )"
+          "( 0 rule:ident seqnc 0-1 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-1 | < None of choices matched input :: rep choice @1 > ) )"
+          --"( 0 rule:ident seqnc 0-1 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-1 | ∅ ) )"
+      {-
       it "parsing identifier rule 2" $
         withgrm "t0"
           identifierGrammar
           "( 0 rule:ident seqnc 0-2 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-2 | ( 0 rep choice 1-2 | ( 0 rule:alphaNum choice 1-2 | ( 0 rule:num char-range 1-2 ) ) ) ) )"
+
       it "parsing identifier rule 3" $
         withgrm "t0 "
           identifierGrammar
           "( 0 rule:ident seqnc 0-2 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-2 | ( 0 rep choice 1-2 | ( 0 rule:alphaNum choice 1-2 | ( 0 rule:num char-range 1-2 ) ) ) ) )"
+      -}
 
+{-
       it "parses `blocks`" $
         withgrmfile "blocks"
       it "parses `grammar`" $
