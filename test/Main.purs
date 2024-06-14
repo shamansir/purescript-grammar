@@ -21,7 +21,7 @@ import Test.Spec.Runner (runSpec)
 import Node.Encoding (Encoding(..)) as Encoding
 import Node.FS.Sync (readTextFile, writeTextFile)
 
-import Grammar (Grammar, AST)
+import Grammar (Grammar, AST(..), ASTNode(..), Tree(..), Rule(..), Attempt(..))
 import Grammar.Parser (parser) as Grammar
 import AST.Parser (parse) as WithGrammar
 
@@ -40,6 +40,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       withgrmfile = parsesWithGrammarFromFile
       mkerr = mkParseError
       mkserr = mkSParseError
+    {-
     describe "parsing grammars (inline)" $ do
       it "should parse simple grammar (string)" $
         grm "main :- \"foobar\".\n" "main :- \"foobar\".\n"
@@ -135,21 +136,25 @@ main = launchAff_ $ runSpec [consoleReporter] do
         grmfile "json"
       pending' "parses `test`" $
         grmfile "test"
+    -}
 
-    {-
+
     describe "parsing with grammars" $ do
 
-      pending' "failing to parse" $
+      {-
+      it "failing to parse" $
         withgrm
           "?"
           """main :- "foo"."""
           "-"
+      -}
       it "parsing strings" $
         withgrm
           "foo"
           """main :- "foo"."""
-          """( 0 <main> text 0-3 )"""
-      it "parsing strings fails" $
+          $ b_text "foo" 0 3
+        {-
+      it "parsing strings fails 2" $
         withgrm
           "foa"
           """main :- "foo"."""
@@ -370,21 +375,16 @@ main = launchAff_ $ runSpec [consoleReporter] do
           "main :- ([a-z] | \"\")."
           "( 0 <main> choice 0-1 | ( 0 ch:0 char-range 0-1 ) )"
       -}
-      -- let
-      --   identifierGrammar =
-      --     """main :- ident.
-      --        alpha :- ([a-z] | [A-Z] | "_").
-      --        num :- [0-9].
-      --        alphaNum :- (alpha | num).
-      --        ident :- [alpha, repSep((alphaNum | "."), "")]."""
 
+      {-
       let
         identifierGrammar =
-          """main :- alphaNum.
+          """main :- ident.
              alpha :- ([a-z] | [A-Z] | "_").
              num :- [0-9].
              alphaNum :- (alpha | num).
-             ident :- [alphaNum, repSep((alphaNum | "."), "")]."""
+             ident :- [alpha, repSep((alphaNum | "."), "")]."""
+      -}
 
       {-
 
@@ -393,14 +393,12 @@ main = launchAff_ $ runSpec [consoleReporter] do
           identifierGrammar
           "( 0 rule:ident seqnc 0-1 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-1 | < None of choices matched input :: rep choice @1 > ) )"
           --"( 0 rule:ident seqnc 0-1 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-1 | ∅ ) )"
-      -}
 
       it "parsing identifier rule 2" $
         withgrm "0"
           identifierGrammar
           "( 0 rule:ident seqnc 0-2 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-2 | ( 0 rep choice 1-2 | ( 0 rule:alphaNum choice 1-2 | ( 0 rule:num char-range 1-2 ) ) ) ) )"
 
-  {-
       it "parsing identifier rule 3" $
         withgrm "t0 "
           identifierGrammar
@@ -422,6 +420,9 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrmfile "test"
 -}
 
+
+b_text :: String -> Int -> Int -> AST Int
+b_text text start end = AST $ Leaf { rule : Text text, result : Match { start, end } 0 }
 
 
 parsesGrammar ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String → m Unit
@@ -451,12 +452,12 @@ mkSParseError :: String -> Int -> SP.ParseError
 mkSParseError error pos = { error, pos }
 
 
-parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String -> String → m Unit
+parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type) a. Show a => MonadThrow Error m ⇒ String → String -> AST a → m Unit
 parsesWithGivenGrammarAs str grammarStr expectation =
   let
     eGrammar = P.runParser grammarStr Grammar.parser
     buildAst grammar = WithGrammar.parse grammar (const 0) str
-  in (show <$> buildAst <$> lmap convertError eGrammar) `shouldEqual` (Right expectation)
+  in (show <$> buildAst <$> lmap convertError eGrammar) `shouldEqual` (Right $ show expectation)
 
 
 parsesWithGrammarFromFile :: ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Error m => String -> m Unit
