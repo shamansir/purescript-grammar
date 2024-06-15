@@ -4,14 +4,14 @@ import Prelude
 
 import Data.Maybe (Maybe(..), maybe)
 import Data.Either (Either(..))
-import Data.Map (empty) as Map
+import Data.Map (empty, lookup) as Map
 import Data.String (length, take) as String
 import Data.String.CodeUnits (charAt, length, splitAt, drop) as SCU
 -- import Data.String.CodePoints (head) as SCP
-import Data.Array (uncons, snoc, index) as Array
+import Data.Array (uncons, snoc, index, singleton) as Array
 import Data.Tuple.Nested ((/\), type (/\))
 
-import Grammar (Grammar, Rule(..), AST(..), Tree(..), Attempt(..), ASTNode, RuleSet, At(..), Error(..), CharRule(..), Found(..), Expected(..), CharX(..))
+import Grammar (Grammar, Rule(..), AST(..), Tree(..), Attempt(..), ASTNode, RuleSet, At(..), Error(..), CharRule(..), Found(..), Expected(..), CharX(..), CaptureName, RuleName)
 import Grammar (set, main, found, eoi, expected, toChar) as G
 
 
@@ -49,10 +49,19 @@ step (Parser p) = p
 
 
 parseRule :: forall a. RuleSet -> (Rule -> a) -> At -> Rule -> P a
-parseRule set f at rule =
+parseRule set f at rule = -- FIXME?: `at` is never used
     case rule of
         Text expected -> _text f rule expected
-        _ -> _unexpectedFail
+        CharRule (Single charX) -> _char f rule charX
+        CharRule (Not charX) -> _negChar f rule charX
+        CharRule (Range from to) -> _charRange f rule from to
+        CharRule Any -> _anyChar f rule
+        Sequence sequence -> _sequence set f rule sequence
+        Choice options -> _choice set f rule options
+        Ref mbCapture ruleName -> _ref set f rule mbCapture ruleName
+        RepSep rep sep -> _repSep set f rule { rep, sep }
+        Placeholder -> _text f rule "???"
+        None -> _unexpectedFail
 
 
 _unexpectedFail :: forall a. P a
@@ -203,6 +212,30 @@ _repSep set f rule { rep, sep } =
                     IterStop prevStep.rest soFar $ Match { start : start.position, end : _.position prevStep.rest } $ f irule
 
 
+_ref :: forall a. RuleSet -> (Rule -> a) -> Rule -> Maybe CaptureName -> RuleName -> P a
+_ref set f rule mbCapture ruleName =
+    Parser \state ->
+        let
+            mbRule = set # Map.lookup ruleName
+            mbRuleStep =
+                flip step state <$> parseRule set f (At ruleName) <$> mbRule
+            rest = maybe state _.rest mbRuleStep
+            result =
+                case mbRuleStep of
+                    Just ruleStep -> Match { start : state.position, end : _.position $ ruleStep.rest } $ f rule
+                    Nothing -> Fail state.position
+                                    $ maybe
+                                        (RuleApplicationFailed { name : ruleName, capture : mbCapture })
+                                        (const $ RuleNotFoundError { name : ruleName, capture : mbCapture })
+                                    $ mbRule
+            children = maybe [] (Array.singleton <<< _.node) mbRuleStep
+        in
+            { value : unit
+            , rest : rest
+            , node : Node { rule, result } children
+            }
+
+
 data IterStep rem a
     = IterStop State (Array (ASTNode a)) (Attempt a)
     | IterNext rem Rule At State
@@ -231,10 +264,10 @@ _niter set f rule remaining check =
     where
         iterStep :: State -> Array (ASTNode a) -> Int -> IterStep rem a -> Step _ Unit
         iterStep _ _ _ (IterFail state) = _unexpectedStep state
-        iterStep _ _ _ (IterStop state chilren result) =
+        iterStep _ _ _ (IterStop state children result) =
             { value : unit
             , rest : state
-            , node : Node { rule, result } chilren
+            , node : Node { rule, result } children
             }
         iterStep start resultsSoFar index (IterNext remaining nextRule at state) =
             let
@@ -339,7 +372,7 @@ _makeError substr =
         CharRule Any -> AnyCharacterError { found : qfoundchar substr }
         Choice _ -> ChoiceError { }
         Sequence _ -> SequenceError { index : 0 }  -- FIXME
-        Ref _ name -> RuleNotFoundError { name }
+        Ref mbCapture name -> RuleNotFoundError { name, capture : mbCapture }
         RepSep _ _ -> RepSepError { occurence : 0 } -- FIXME
         Placeholder -> PlaceholderError
         None -> Unknown

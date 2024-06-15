@@ -105,7 +105,8 @@ data Error
     | NegCharacterError { notExpected :: Expected CharX, found :: Found Char }
     | CharacterRangeError { from :: Expected Char, to :: Expected Char, found :: Found Char }
     | AnyCharacterError { found :: Found Char }
-    | RuleNotFoundError { name :: String }
+    | RuleNotFoundError { name :: RuleName, capture :: Maybe CaptureName }
+    | RuleApplicationFailed { name :: RuleName, capture :: Maybe CaptureName }
     -- | RepeatError { occurence :: Int } -- { occurence :: Int, rep :: Error }
     -- | SeparatorError { occurence :: Int } -- { occurence :: Int, sep :: Error }
     | RepSepError { occurence :: Int }
@@ -295,6 +296,7 @@ instance Show Error where
         AnyCharacterError err -> "Expected any character, but found " <> show err.found
         ChoiceError _ -> "None of choices matched input"
         RuleNotFoundError err -> "Rule `" <> err.name <> "` was not found"
+        RuleApplicationFailed err -> "Rule `" <> err.name <> "` didn't match"
         SequenceError _ -> "sequence TODO"
         -- RepeatError err -> "rep TODO"
         -- SeparatorError err -> "sep TODO"
