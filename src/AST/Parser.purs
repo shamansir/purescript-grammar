@@ -135,7 +135,7 @@ _charRange f rule from to =
 
 _sequence :: forall a. RuleSet -> (Rule -> a) -> Rule -> Array Rule -> P a
 _sequence set f rule seq =
-    _niter set f rule seq $ \{ index, remaining, prev, soFar, start } ->
+    _niter set f rule seq $ \{ index, remaining, prev, soFar, start, irule } ->
         case Array.uncons remaining /\ prev of
             Just { head, tail } /\ Start -> -- first iteration, remaining sequence is not empty
                 IterNext tail head (InSequence index) start
@@ -149,17 +149,17 @@ _sequence set f rule seq =
 
             Nothing /\ Prev prevStep ->
                 IterStop prevStep.rest soFar $ if not $ _failed prevStep.node then -- the last item matched, all is good
-                    Match { start : start.position, end : _.position prevStep.rest } $ f rule
+                    Match { start : start.position, end : _.position prevStep.rest } $ f irule
                 else -- the sequence is finished, but the last rule failed to match, fail
                     Fail (_.position prevStep.rest) $ SequenceError { index }
 
             Nothing /\ Start -> -- when there are no rules specfieid in a sequence, it always matches as empty
-                IterStop start soFar $ Match { start : start.position, end : start.position } $ f rule
+                IterStop start soFar $ Match { start : start.position, end : start.position } $ f irule
 
 
 _choice :: forall a. RuleSet -> (Rule -> a) -> Rule -> Array Rule -> P a
 _choice set f rule options =
-    _niter set f rule options $ \{ index, remaining, prev, soFar, start } ->
+    _niter set f rule options $ \{ index, remaining, prev, soFar, start, irule } ->
         case Array.uncons remaining /\ prev of
             Just { head, tail } /\ Start -> -- first iteration, remaining options are not empty
                 IterNext tail head (ChoiceOf index) start
@@ -184,8 +184,23 @@ data RepOrSep
     | Sep
 
 
-_repSep :: forall a. RuleSet -> (Rule -> a) -> Rule -> Rule -> P a
-_repSep set f rep sep = _unexpectedFail
+_repSep :: forall a. RuleSet -> (Rule -> a) -> Rule -> { rep :: Rule, sep :: Rule } -> P a
+_repSep set f rule { rep, sep } =
+    _niter set f rule Rep $ \{ remaining, prev, soFar, start, irule } ->
+        case remaining /\ prev of
+            Rep /\ Start ->
+                IterNext Sep rep RepOf start
+
+            Sep /\ Start ->
+                IterFail start -- should be impossible!
+
+            repOrSep /\ Prev prevStep ->
+                if not $ _failed prevStep.node then
+                    case repOrSep of
+                        Rep -> IterNext Sep rep RepOf prevStep.rest
+                        Sep -> IterNext Rep sep SepOf prevStep.rest
+                else
+                    IterStop prevStep.rest soFar $ Match { start : start.position, end : _.position prevStep.rest } $ f irule
 
 
 data IterStep rem a
@@ -204,6 +219,7 @@ type Iteration rem a =
     , remaining :: rem
     , soFar :: Array (ASTNode a)
     , start :: State
+    , irule :: Rule
     , prev :: IterPrev a
     }
 
@@ -211,7 +227,7 @@ type Iteration rem a =
 _niter :: forall rem a. RuleSet -> (Rule -> a) -> Rule -> rem -> (Iteration rem a -> IterStep rem a) -> P a
 _niter set f rule remaining check =
     Parser \state ->
-        iterStep state [] 0 $ check { index : 0, remaining, soFar : [], start : state, prev : Start }
+        iterStep state [] 0 $ check { index : 0, remaining, soFar : [], start : state, prev : Start, irule : None }
     where
         iterStep :: State -> Array (ASTNode a) -> Int -> IterStep rem a -> Step _ Unit
         iterStep _ _ _ (IterFail state) = _unexpectedStep state
@@ -227,7 +243,7 @@ _niter set f rule remaining check =
                 soFar = Array.snoc resultsSoFar lastStep.node
                 nextIndex = index + 1 -- TODO: limit the number of attempts to prevent stack overflow
             in
-                iterStep start soFar nextIndex $ check { index : nextIndex, remaining, soFar, start, prev : Prev lastStep }
+                iterStep start soFar nextIndex $ check { index : nextIndex, remaining, soFar, start, prev : Prev lastStep, irule : nextRule }
 
 
 
