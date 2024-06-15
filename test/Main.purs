@@ -153,6 +153,11 @@ main = launchAff_ $ runSpec [consoleReporter] do
           "foo"
           """main :- "foo"."""
           $ b_text "foo" 0 3
+      it "parsing strings at end-of-input" $
+        withgrm
+          ""
+          """main :- "foo"."""
+          $ b_text "foo" 0 3
         {-
       it "parsing strings fails 2" $
         withgrm

@@ -3,12 +3,14 @@ module AST.Parser where
 import Prelude
 
 import Data.Maybe (Maybe(..), maybe)
+import Data.Either (Either(..))
 import Data.Map (empty) as Map
 import Data.String (length, take) as String
-import Data.String.CodeUnits (charAt, length, splitAt) as SCU
+import Data.String.CodeUnits (charAt, length, splitAt, drop) as SCU
+-- import Data.String.CodePoints (head) as SCP
 
-import Grammar (Grammar, Rule(..), AST(..), Tree(..), Attempt(..), ASTNode, RuleSet, At(..), Error(..), CharRule(..), Found(..), Expected(..))
-import Grammar (set, main, found, eoi, expected) as G
+import Grammar (Grammar, Rule(..), AST(..), Tree(..), Attempt(..), ASTNode, RuleSet, At(..), Error(..), CharRule(..), Found(..), Expected(..), CharX(..))
+import Grammar (set, main, found, eoi, expected, toChar) as G
 
 
 type State = { position :: Int, next :: String }
@@ -42,44 +44,119 @@ parseRule set f at rule =
         _ -> Parser $ \state -> { value : unit, rest : state, node : Leaf { rule : Ref Nothing "main", result : Match { start : 0, end : 0 } $ f (Ref Nothing "main") } }
 
 
+data IfProceed
+    = Proceed
+    | Stop Error
+
+
 _text :: forall a. (Rule -> a) -> Rule -> String -> P a
-_text f rule expected = Parser \{ position, next } ->
+_text f rule expected =
+    _ltry f rule (String.length expected) $ case _ of
+        Found found ->
+            if (found == expected)
+                then Proceed
+                else Stop $ TextError { expected : G.expected expected, found : G.found found }
+        EOI ->
+            Stop $ TextError { expected : G.expected expected, found : G.eoi }
+
+
+_char :: forall a. (Rule -> a) -> Rule -> CharX -> P a
+_char f rule expected =
+    _ltryChar f rule $ case _ of
+        Found char ->
+            if char == G.toChar expected
+                then Proceed
+            else Stop $ CharacterError { expected : G.expected expected, found : G.found char }
+        EOI ->
+            Stop $ CharacterError { expected : G.expected expected, found : G.eoi }
+
+
+_anyChar :: forall a. (Rule -> a) -> Rule -> P a
+_anyChar f rule =
+    _ltryChar f rule $ case _ of
+        Found _ ->
+            Proceed
+        EOI ->
+            Stop $ AnyCharacterError { found : G.eoi }
+
+
+_negChar :: forall a. (Rule -> a) -> Rule -> CharX -> P a
+_negChar f rule notExpected =
+    _ltryChar f rule $ case _ of
+        Found char ->
+            if char == G.toChar notExpected
+                then Stop $ NegCharacterError { notExpected : G.expected notExpected, found : G.found char }
+            else Proceed
+        EOI ->
+            Stop $ NegCharacterError { notExpected : G.expected notExpected, found : G.eoi }
+
+
+_charRange :: forall a. (Rule -> a) -> Rule -> Char -> Char -> P a
+_charRange f rule from to =
+    _ltryChar f rule $ case _ of
+        Found char ->
+            if (char >= from) && (char <= to)
+                then Proceed
+                else Stop $ CharacterRangeError { from : G.expected from, to : G.expected to, found : G.found char }
+        EOI ->
+            Stop $ CharacterRangeError { from : G.expected from, to : G.expected to, found : G.eoi }
+
+
+_ltryChar :: forall a. (Rule -> a) -> Rule -> (Found Char -> IfProceed) -> P a
+_ltryChar f rule tryWith = _ltry f rule 1 $ case _ of
+    Found found ->
+        case SCU.charAt 0 found of
+            Just char ->
+                tryWith $ Found char
+            Nothing ->
+                tryWith EOI
+    EOI ->
+        tryWith EOI
+
+
+_ltry :: forall a. (Rule -> a) -> Rule -> Int -> (Found String -> IfProceed) -> P a
+_ltry f rule advance tryWith = Parser \{ position, next } ->
     let
-        length = SCU.length expected
-        { before, after } = SCU.splitAt length next
+        { before, after } = SCU.splitAt advance next
     in
-        if before == expected then
-            _lmatch f rule after position $ position + length
+        if String.length next > 0 then
+            case tryWith $ Found before of
+                Proceed ->
+                    _lmatch after position $ position + advance
+                Stop error ->
+                    _lfail next position error
         else
-            _lfail rule next position $ TextError { expected : G.expected expected, found : if String.length next > 0 then G.found before else G.eoi }
+            case tryWith EOI of
+                Proceed -> _lfail next position EndOfInput
+                Stop error -> _lfail next position error
 
+    where
 
-_lmatch :: forall a. (Rule -> a) -> Rule -> String -> Int -> Int -> Step a Unit
-_lmatch f rule nextStr curPos nextPos =
-    { value: unit
-    , rest: { next: nextStr, position: nextPos }
-    , node :
-        Leaf
-            { rule
-            , result : Match { start : curPos, end : nextPos } $ f rule
+        _lmatch :: String -> Int -> Int -> Step a Unit
+        _lmatch nextStr curPos nextPos =
+            { value: unit
+            , rest: { next: nextStr, position: nextPos }
+            , node :
+                Leaf
+                    { rule
+                    , result : Match { start : curPos, end : nextPos } $ f rule
+                    }
             }
-    }
 
-
-_lfail :: forall a. Rule -> String -> Int -> Error -> Step a Unit
-_lfail rule next position error =
-    { value: unit
-    , rest: { position, next }
-    , node :
-        Leaf
-            { rule
-            , result : Fail position error
+        _lfail :: String -> Int -> Error -> Step a Unit
+        _lfail next position error =
+            { value: unit
+            , rest: { position, next }
+            , node :
+                Leaf
+                    { rule
+                    , result : Fail position error
+                    }
             }
-    }
 
 
-text :: forall a. a -> String -> P a
-text a expected = _text (const a) (Text expected) expected
+-- text :: forall a. a -> String -> P a
+-- text a expected = _text (const a) (Text expected) expected
 
 
 
