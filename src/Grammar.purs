@@ -109,7 +109,7 @@ data Error
     -- | RepeatError { occurence :: Int } -- { occurence :: Int, rep :: Error }
     -- | SeparatorError { occurence :: Int } -- { occurence :: Int, sep :: Error }
     | RepSepError { occurence :: Int }
-    | SequenceError {} -- { errors :: Array Error }
+    | SequenceError { index :: Int } -- { errors :: Array Error }
     | ChoiceError {} -- { errors :: Array Error }
     | PlaceholderError
     | EndOfInput

@@ -8,6 +8,7 @@ import Data.Map (empty) as Map
 import Data.String (length, take) as String
 import Data.String.CodeUnits (charAt, length, splitAt, drop) as SCU
 -- import Data.String.CodePoints (head) as SCP
+import Data.Array (uncons, snoc) as Array
 
 import Grammar (Grammar, Rule(..), AST(..), Tree(..), Attempt(..), ASTNode, RuleSet, At(..), Error(..), CharRule(..), Found(..), Expected(..), CharX(..))
 import Grammar (set, main, found, eoi, expected, toChar) as G
@@ -33,15 +34,44 @@ parse grammar f = runParser $ parseRule (G.set grammar) f Main $ G.main grammar
 
 
 runParser :: forall a. P a -> String -> AST a
-runParser (Parser p) str =
-    AST $ _.node $ p { position : 0, next : str }
+runParser p str =
+    runParserWith p { position : 0, next : str }
+
+
+runParserWith :: forall a. P a -> State -> AST a
+runParserWith p =
+    AST <<< _.node <<< step p
+
+
+step :: forall a. P a -> State -> Step a Unit
+step (Parser p) = p
 
 
 parseRule :: forall a. RuleSet -> (Rule -> a) -> At -> Rule -> P a
 parseRule set f at rule =
     case rule of
         Text expected -> _text f rule expected
-        _ -> Parser $ \state -> { value : unit, rest : state, node : Leaf { rule : Ref Nothing "main", result : Match { start : 0, end : 0 } $ f (Ref Nothing "main") } }
+        _ -> _unexpectedFail
+
+
+_unexpectedFail :: forall a. P a
+_unexpectedFail =
+    _unexpectedFail' unit
+
+
+_unexpectedFail' :: forall a x. x -> PX a x
+_unexpectedFail' value =
+    Parser $ _unexpectedStep' value
+
+
+_unexpectedStep :: forall a. State -> Step a Unit
+_unexpectedStep =
+    _unexpectedStep' unit
+
+
+_unexpectedStep' :: forall a x. x -> State -> Step a x
+_unexpectedStep' value state =
+    { value, rest : state, node : Leaf { rule : None, result : Fail 0 EndOfInput } }
 
 
 data IfProceed
@@ -100,6 +130,86 @@ _charRange f rule from to =
                 else Stop $ CharacterRangeError { from : G.expected from, to : G.expected to, found : G.found char }
         EOI ->
             Stop $ CharacterRangeError { from : G.expected from, to : G.expected to, found : G.eoi }
+
+
+_sequence :: forall a. RuleSet -> (Rule -> a) -> Rule -> Array Rule -> P a
+_sequence set f rule seq = Parser \state -> seqIter state.position state [] 0 seq
+    where
+        seqIter :: Int -> State -> Array (ASTNode a) -> Int -> Array Rule -> Step _ Unit
+        seqIter start istate resultsSoFar _ [] =
+            { value : unit
+            , rest : istate
+            , node :
+                Node
+                    { rule
+                    , result : Match { start, end : istate.position } $ f rule
+                    }
+                    resultsSoFar
+            }
+        seqIter start istate resultsSoFar index nextRules =
+            case Array.uncons nextRules of
+                Just { head, tail } ->
+                    let
+                        nextRule = head
+                        ruleParser = parseRule set f (InSequence index) nextRule
+                        nextStep = step ruleParser istate
+                    in
+                        if not $ _failed $ _.node nextStep then
+                            seqIter start nextStep.rest (Array.snoc resultsSoFar $ _.node nextStep) (index + 1) tail
+                        else
+                            { value : unit
+                            , rest : istate
+                            , node :
+                                Node
+                                    { rule
+                                    , result : Fail istate.position $ SequenceError { index }
+                                    }
+                                $ Array.snoc resultsSoFar $ _.node nextStep
+                            }
+                Nothing ->
+                    _unexpectedStep istate
+
+
+_choice :: forall a. RuleSet -> (Rule -> a) -> Rule -> Array Rule -> P a
+_choice set f rule seq = Parser \state -> choiceIter state [] 0 seq
+    where
+        choiceIter :: State -> Array (ASTNode a) -> Int -> Array Rule -> Step _ Unit
+        choiceIter state resultsSoFar _ [] =
+            { value : unit
+            , rest : state
+            , node :
+                Node
+                    { rule
+                    , result : Fail state.position $ ChoiceError { }
+                    }
+                    resultsSoFar
+            }
+        choiceIter state resultsSoFar index nextRules =
+            case Array.uncons nextRules of
+                Just { head, tail } ->
+                    let
+                        nextRule = head
+                        ruleParser = parseRule set f (ChoiceOf index) nextRule
+                        nextStep = step ruleParser state
+                    in
+                        if not $ _failed $ _.node nextStep then
+                            { value : unit
+                            , rest : state
+                            , node :
+                                Node
+                                    { rule
+                                    , result : Match { start : state.position, end : _.position $ _.rest $ nextStep } $ f rule
+                                    }
+                                $ Array.snoc resultsSoFar $ _.node nextStep
+                            }
+                        else
+                            choiceIter state (Array.snoc resultsSoFar $ _.node nextStep) (index + 1) tail
+                Nothing ->
+                    _unexpectedStep state
+
+
+_repSep :: forall a. RuleSet -> (Rule -> a) -> Rule -> Rule -> P a
+_repSep set f rep sep = _unexpectedFail
 
 
 _ltryChar :: forall a. (Rule -> a) -> Rule -> (Found Char -> IfProceed) -> P a
@@ -170,6 +280,20 @@ _try p =
     ?wh -}
 
 
+_resultOf :: forall a. ASTNode a -> Attempt a
+_resultOf (Leaf { result }) = result
+_resultOf (Node { result } _) = result
+
+
+_failed :: forall a. ASTNode a -> Boolean
+_failed = _resultOf >>> _failedAttempt
+
+
+_failedAttempt :: forall a. Attempt a -> Boolean
+_failedAttempt (Match _ _) = false
+_failedAttempt (Fail _ _) = true
+
+
 _makeError :: String -> Rule -> Error
 _makeError substr =
     case _ of
@@ -179,7 +303,7 @@ _makeError substr =
         CharRule (Range from to) -> CharacterRangeError { from : G.expected from, to : G.expected to, found : qfoundchar substr }
         CharRule Any -> AnyCharacterError { found : qfoundchar substr }
         Choice _ -> ChoiceError { }
-        Sequence _ -> SequenceError { }
+        Sequence _ -> SequenceError { index : 0 }  -- FIXME
         Ref _ name -> RuleNotFoundError { name }
         RepSep _ _ -> RepSepError { occurence : 0 } -- FIXME
         Placeholder -> PlaceholderError
