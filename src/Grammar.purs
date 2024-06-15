@@ -57,24 +57,6 @@ data At
     | Nil
 
 
-{-
-type Match =
-    { range :: Range
-    -- , parent :: { rule :: Rule, location :: At }
-    , location :: At
-    , rule :: Rule
-    }
-
-
-type Failure =
-    { position :: Int
-    -- , parent :: { rule :: Rule, location :: At }
-    , location :: At
-    , error :: Error
-    }
--}
-
-
 data Tree n -- TODO: use Yoga.Tree implementation
     = Leaf n
     | Node n (Array (Tree n))
@@ -343,3 +325,9 @@ expected = Expected
 
 eoi :: forall a. Found a
 eoi = EOI
+
+
+ruleOf :: forall a. ASTNode a -> Rule
+ruleOf = case _ of
+    Leaf { rule } -> rule
+    Node { rule } _ -> rule

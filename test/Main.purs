@@ -6,7 +6,7 @@ import Effect (Effect)
 import Effect.Class (liftEffect, class MonadEffect)
 import Effect.Class.Console (log)
 import Control.Monad.Error.Class (class MonadThrow)
-import Effect.Exception (Error)
+import Effect.Exception (Error) as Ex
 
 import Data.Either (Either(..))
 import Data.Bifunctor (lmap)
@@ -21,7 +21,7 @@ import Test.Spec.Runner (runSpec)
 import Node.Encoding (Encoding(..)) as Encoding
 import Node.FS.Sync (readTextFile, writeTextFile)
 
-import Grammar (Grammar, AST(..), ASTNode(..), Tree(..), Rule(..), Attempt(..))
+import Grammar (Grammar, AST(..), ASTNode(..), Tree(..), Rule(..), Attempt(..), Expected(..), Found(..), Error(..), CharRule(..), CharX(..), ruleOf)
 import Grammar.Parser (parser) as Grammar
 import AST.Parser (parse) as WithGrammar
 
@@ -141,65 +141,67 @@ main = launchAff_ $ runSpec [consoleReporter] do
 
     describe "parsing with grammars" $ do
 
-      {-
       it "failing to parse" $
         withgrm
           "?"
           """main :- "foo"."""
-          "-"
-      -}
+          $ AST $ l_text_err "foo" (Found "?") 0
       it "parsing strings" $
         withgrm
           "foo"
           """main :- "foo"."""
-          $ b_text "foo" 0 3
+          $ AST $ l_text "foo" 0 3
       it "parsing strings at end-of-input" $
         withgrm
           ""
           """main :- "foo"."""
-          $ b_text "foo" 0 3
-        {-
+          $ AST $ l_text_err "foo" EOI 0
       it "parsing strings fails 2" $
         withgrm
           "foa"
           """main :- "foo"."""
-          """< Expected 'foo', but found 'foa' :: <main> text @0 >"""
+          $ AST $ l_text_err "foo" (Found "foa") 0
       it "parsing chars" $
         withgrm
           "f"
           "main :- 'f'."
-          """( 0 <main> char 0-1 )"""
+          $ AST $ l_char 'f' 0
       it "parsing chars fails" $
         withgrm
           "g"
           "main :- 'f'."
-          """< Expected 'f', but found 'g' :: <main> char @0 >"""
+          $ AST $ l_char_err 'f' (Found 'g') 0
       it "parsing negated chars" $
         withgrm
           "o"
           "main :- ^'f'."
-          """( 0 <main> not-char 0-1 )"""
+          $ AST $ l_neg_char 'f' 0
       it "parsing negated chars fails" $
         withgrm
           "f"
           "main :- ^'f'."
-          """< Expected not to find 'f', but found 'f' :: <main> not-char @0 >"""
+          $ AST $ l_neg_char_err 'f' 0
       it "parsing char ranges" $
         withgrm
           "f"
           "main :- [c-g]."
-          """( 0 <main> char-range 0-1 )"""
+          $ AST $ l_char_rng { from : 'c', to : 'g' } 0 -- FIXME: passed rule info is not shown so with any from/to this test passes
       it "parsing char ranges fails" $
         withgrm
           "a"
           "main :- [c-g]."
-          """< Expected character in range from 'c' to 'g', but found 'a' :: <main> char-range @0 >"""
+          $ AST $ l_char_rng_err { from : 'c', to : 'g' } (Found 'a') 0
       it "parsing char sequences" $
         withgrm
           "foo"
           "main :- ['f','o','o']."
-          "( 0 <main> seqnc 0-3 | ( 0 seq:0 char 0-1 ) : ( 0 seq:1 char 1-2 ) : ( 0 seq:2 char 2-3 ) )"
-      it "parsing char sequences fails" $
+          $ AST $ n_seq 0 3
+            [ l_char 'f' 0
+            , l_char 'o' 1
+            , l_char 'o' 2
+            ]
+          -- "( 0 <main> seqnc 0-3 | ( 0 seq:0 char 0-1 ) : ( 0 seq:1 char 1-2 ) : ( 0 seq:2 char 2-3 ) )"
+      {- it "parsing char sequences fails" $
         withgrm
           "fxo"
           "main :- ['f','o','o']."
@@ -426,16 +428,54 @@ main = launchAff_ $ runSpec [consoleReporter] do
 -}
 
 
-b_text :: String -> Int -> Int -> AST Int
-b_text text start end = AST $ Leaf { rule : Text text, result : Match { start, end } 0 }
+l_char :: Char -> Int -> ASTNode Int
+l_char ch start = Leaf { rule : CharRule $ Single $ Raw ch, result : Match { start, end : start + 1 } 0 }
 
 
-parsesGrammar ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → String → m Unit
+l_neg_char :: Char -> Int -> ASTNode Int
+l_neg_char ch start = Leaf { rule : CharRule $ Not $ Raw ch, result : Match { start, end : start + 1 } 0 }
+
+
+l_char_rng :: { from :: Char, to :: Char } -> Int -> ASTNode Int
+l_char_rng { from, to } start = Leaf { rule : CharRule $ Range from to, result : Match { start, end : start + 1 } 0 }
+
+
+l_text :: String -> Int -> Int -> ASTNode Int
+l_text text start end = Leaf { rule : Text text, result : Match { start, end } 0 }
+
+
+l_char_err :: Char -> Found Char -> Int -> ASTNode Int
+l_char_err ch found position =
+  Leaf { rule : CharRule $ Single $ Raw ch, result : Fail position $ CharacterError { expected : Expected $ Raw ch, found : found }  }
+
+
+l_neg_char_err :: Char -> Int -> ASTNode Int
+l_neg_char_err ch position =
+  Leaf { rule : CharRule $ Not $ Raw ch, result : Fail position $ NegCharacterError { notExpected : Expected $ Raw ch, found : Found ch }  }
+
+
+l_char_rng_err :: { from :: Char, to :: Char } -> Found Char -> Int -> ASTNode Int
+l_char_rng_err { from, to } found position = Leaf { rule : CharRule $ Range from to, result : Fail position $ CharacterRangeError { found, from : Expected from, to : Expected to }  }
+
+
+l_text_err :: String -> Found String -> Int -> ASTNode Int
+l_text_err text found position =
+  Leaf { rule : Text text, result : Fail position $ TextError { expected : Expected text, found : found }  }
+
+
+n_seq :: Int -> Int -> Array (ASTNode Int) -> ASTNode Int
+n_seq start end items =
+  Node
+    { rule : Sequence $ ruleOf <$> items, result : Match { start, end } 0 }
+    items
+
+
+parsesGrammar ∷ ∀ (m ∷ Type -> Type). MonadThrow Ex.Error m ⇒ String → String → m Unit
 parsesGrammar grammarStr expectation =
   (show <$> P.runParser grammarStr Grammar.parser) `shouldEqual` (Right expectation)
 
 
-parsesGrammarFile ∷ ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Error m ⇒ String → m Unit
+parsesGrammarFile ∷ ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Ex.Error m ⇒ String → m Unit
 parsesGrammarFile fileName = do
   grammarStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar"
   expectation <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar.expected"
@@ -444,7 +484,7 @@ parsesGrammarFile fileName = do
   (show <$> eGrammar) `shouldEqual` (Right expectation)
 
 
-failsToParseGrammarWithError ∷ ∀ (m ∷ Type -> Type). MonadThrow Error m ⇒ String → P.ParseError → m Unit
+failsToParseGrammarWithError ∷ ∀ (m ∷ Type -> Type). MonadThrow Ex.Error m ⇒ String → P.ParseError → m Unit
 failsToParseGrammarWithError grammarStr error =
   (show <$> P.runParser grammarStr Grammar.parser) `shouldEqual` (Left error)
 
@@ -457,7 +497,7 @@ mkSParseError :: String -> Int -> SP.ParseError
 mkSParseError error pos = { error, pos }
 
 
-parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type) a. Show a => MonadThrow Error m ⇒ String → String -> AST a → m Unit
+parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type) a. Show a => MonadThrow Ex.Error m ⇒ String → String -> AST a → m Unit
 parsesWithGivenGrammarAs str grammarStr expectation =
   let
     eGrammar = P.runParser grammarStr Grammar.parser
@@ -465,7 +505,7 @@ parsesWithGivenGrammarAs str grammarStr expectation =
   in (show <$> buildAst <$> lmap convertError eGrammar) `shouldEqual` (Right $ show expectation)
 
 
-parsesWithGrammarFromFile :: ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Error m => String -> m Unit
+parsesWithGrammarFromFile :: ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Ex.Error m => String -> m Unit
 parsesWithGrammarFromFile fileName = do
     grammarStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar"
     sourceStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/sources/" <> fileName <> ".src"
