@@ -8,7 +8,8 @@ import Data.Map (empty) as Map
 import Data.String (length, take) as String
 import Data.String.CodeUnits (charAt, length, splitAt, drop) as SCU
 -- import Data.String.CodePoints (head) as SCP
-import Data.Array (uncons, snoc) as Array
+import Data.Array (uncons, snoc, index) as Array
+import Data.Tuple.Nested ((/\), type (/\))
 
 import Grammar (Grammar, Rule(..), AST(..), Tree(..), Attempt(..), ASTNode, RuleSet, At(..), Error(..), CharRule(..), Found(..), Expected(..), CharX(..))
 import Grammar (set, main, found, eoi, expected, toChar) as G
@@ -133,83 +134,101 @@ _charRange f rule from to =
 
 
 _sequence :: forall a. RuleSet -> (Rule -> a) -> Rule -> Array Rule -> P a
-_sequence set f rule seq = Parser \state -> seqIter state.position state [] 0 seq
-    where
-        seqIter :: Int -> State -> Array (ASTNode a) -> Int -> Array Rule -> Step _ Unit
-        seqIter start istate resultsSoFar _ [] =
-            { value : unit
-            , rest : istate
-            , node :
-                Node
-                    { rule
-                    , result : Match { start, end : istate.position } $ f rule
-                    }
-                    resultsSoFar
-            }
-        seqIter start istate resultsSoFar index nextRules =
-            case Array.uncons nextRules of
-                Just { head, tail } ->
-                    let
-                        nextRule = head
-                        ruleParser = parseRule set f (InSequence index) nextRule
-                        nextStep = step ruleParser istate
-                    in
-                        if not $ _failed $ _.node nextStep then
-                            seqIter start nextStep.rest (Array.snoc resultsSoFar $ _.node nextStep) (index + 1) tail
-                        else
-                            { value : unit
-                            , rest : istate
-                            , node :
-                                Node
-                                    { rule
-                                    , result : Fail istate.position $ SequenceError { index }
-                                    }
-                                $ Array.snoc resultsSoFar $ _.node nextStep
-                            }
-                Nothing ->
-                    _unexpectedStep istate
+_sequence set f rule seq =
+    _niter set f rule seq $ \{ count, index, prev, soFar, start } ->
+        case Array.uncons index /\ prev of
+            Just { head, tail } /\ Start -> -- first iteration, remaining sequence is not empty
+                IterNext tail head (InSequence count) start
+
+            Just { head, tail } /\ Prev prevStep ->
+                if not $ _failed prevStep.node then -- continue while matching, advance the state
+                    IterNext tail head (InSequence count) prevStep.rest
+                else -- stop with the failure when rule failed
+                    IterStop prevStep.rest soFar
+                        $ Fail (_.position prevStep.rest) $ SequenceError { index : count }
+
+            Nothing /\ Prev prevStep ->
+                IterStop prevStep.rest soFar $ if not $ _failed prevStep.node then -- the last item matched, all is good
+                    Match { start : start.position, end : _.position prevStep.rest } $ f rule
+                else -- the sequence is finished, but the last rule failed to match, fail
+                    Fail (_.position prevStep.rest) $ SequenceError { index : count }
+
+            Nothing /\ Start -> -- when there are no rules specfieid in a sequence, it always matches as empty
+                IterStop start soFar $ Match { start : start.position, end : start.position } $ f rule
 
 
 _choice :: forall a. RuleSet -> (Rule -> a) -> Rule -> Array Rule -> P a
-_choice set f rule seq = Parser \state -> choiceIter state [] 0 seq
-    where
-        choiceIter :: State -> Array (ASTNode a) -> Int -> Array Rule -> Step _ Unit
-        choiceIter state resultsSoFar _ [] =
-            { value : unit
-            , rest : state
-            , node :
-                Node
-                    { rule
-                    , result : Fail state.position $ ChoiceError { }
-                    }
-                    resultsSoFar
-            }
-        choiceIter state resultsSoFar index nextRules =
-            case Array.uncons nextRules of
-                Just { head, tail } ->
-                    let
-                        nextRule = head
-                        ruleParser = parseRule set f (ChoiceOf index) nextRule
-                        nextStep = step ruleParser state
-                    in
-                        if not $ _failed $ _.node nextStep then
-                            { value : unit
-                            , rest : state
-                            , node :
-                                Node
-                                    { rule
-                                    , result : Match { start : state.position, end : _.position $ _.rest $ nextStep } $ f rule
-                                    }
-                                $ Array.snoc resultsSoFar $ _.node nextStep
-                            }
-                        else
-                            choiceIter state (Array.snoc resultsSoFar $ _.node nextStep) (index + 1) tail
-                Nothing ->
-                    _unexpectedStep state
+_choice set f rule options =
+    _niter set f rule options $ \{ count, index, prev, soFar, start } ->
+        case Array.uncons index /\ prev of
+            Just { head, tail } /\ Start -> -- first iteration, remaining options are not empty
+                IterNext tail head (ChoiceOf count) start
+
+            remainingOptions /\ Prev prevStep -> -- following iteration, we check later if there are any options remaining
+                if not $ _failed prevStep.node then -- matched last option successfully, stop with informing about it
+                    IterStop prevStep.rest [ prevStep.node ]
+                        $ Match { start : start.position, end : _.position prevStep.rest }
+                        $ f rule
+                else -- still not matched, try further while there are options
+                    case remainingOptions of
+                        Just { head, tail } -> -- remaining options are not yet empty
+                            IterNext tail head (ChoiceOf count) start -- try further, return to the intitial state on the next iteration
+                        Nothing -> -- out of options, but didn't match previously
+                            IterStop start soFar $ Fail start.position $ ChoiceError { }
+
+            Nothing /\ Start -> -- when there are no options specfieid in a choice, it always matches as empty
+                IterStop start soFar $ Match { start : start.position, end : start.position } $ f rule
+
+data RepOrSep
+    = Rep
+    | Sep
 
 
 _repSep :: forall a. RuleSet -> (Rule -> a) -> Rule -> Rule -> P a
 _repSep set f rep sep = _unexpectedFail
+
+
+data IterStep idx a
+    = IterStop State (Array (ASTNode a)) (Attempt a)
+    | IterNext idx Rule At State
+    | IterFail State
+
+
+data IterPrev a
+    = Start
+    | Prev (Step a Unit)
+
+
+type Iteration idx a =
+    { count :: Int
+    , index :: idx
+    , soFar :: Array (ASTNode a)
+    , start :: State
+    , prev :: IterPrev a
+    }
+
+
+_niter :: forall idx a. RuleSet -> (Rule -> a) -> Rule -> idx -> (Iteration idx a -> IterStep idx a) -> P a
+_niter set f rule startIdx check =
+    Parser \state ->
+        iterStep state [] 0 $ check { count : 0, index : startIdx, soFar : [], start : state, prev : Start }
+    where
+        iterStep :: State -> Array (ASTNode a) -> Int -> IterStep idx a -> Step _ Unit
+        iterStep _ _ _ (IterFail state) = _unexpectedStep state
+        iterStep _ _ _ (IterStop state chilren result) =
+            { value : unit
+            , rest : state
+            , node : Node { rule, result } chilren
+            }
+        iterStep start resultsSoFar count (IterNext nextIdx nextRule at state) =
+            let
+                ruleParser = parseRule set f at nextRule
+                lastStep = step ruleParser state
+                soFar = Array.snoc resultsSoFar lastStep.node
+                nextCount = count + 1
+            in
+                iterStep start soFar nextCount $ check { count : nextCount, index : nextIdx, soFar, start, prev : Prev lastStep }
+
 
 
 _ltryChar :: forall a. (Rule -> a) -> Rule -> (Found Char -> IfProceed) -> P a
