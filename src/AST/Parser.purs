@@ -135,23 +135,23 @@ _charRange f rule from to =
 
 _sequence :: forall a. RuleSet -> (Rule -> a) -> Rule -> Array Rule -> P a
 _sequence set f rule seq =
-    _niter set f rule seq $ \{ count, index, prev, soFar, start } ->
-        case Array.uncons index /\ prev of
+    _niter set f rule seq $ \{ index, remaining, prev, soFar, start } ->
+        case Array.uncons remaining /\ prev of
             Just { head, tail } /\ Start -> -- first iteration, remaining sequence is not empty
-                IterNext tail head (InSequence count) start
+                IterNext tail head (InSequence index) start
 
             Just { head, tail } /\ Prev prevStep ->
                 if not $ _failed prevStep.node then -- continue while matching, advance the state
-                    IterNext tail head (InSequence count) prevStep.rest
+                    IterNext tail head (InSequence index) prevStep.rest
                 else -- stop with the failure when rule failed
                     IterStop prevStep.rest soFar
-                        $ Fail (_.position prevStep.rest) $ SequenceError { index : count }
+                        $ Fail (_.position prevStep.rest) $ SequenceError { index }
 
             Nothing /\ Prev prevStep ->
                 IterStop prevStep.rest soFar $ if not $ _failed prevStep.node then -- the last item matched, all is good
                     Match { start : start.position, end : _.position prevStep.rest } $ f rule
                 else -- the sequence is finished, but the last rule failed to match, fail
-                    Fail (_.position prevStep.rest) $ SequenceError { index : count }
+                    Fail (_.position prevStep.rest) $ SequenceError { index }
 
             Nothing /\ Start -> -- when there are no rules specfieid in a sequence, it always matches as empty
                 IterStop start soFar $ Match { start : start.position, end : start.position } $ f rule
@@ -159,10 +159,10 @@ _sequence set f rule seq =
 
 _choice :: forall a. RuleSet -> (Rule -> a) -> Rule -> Array Rule -> P a
 _choice set f rule options =
-    _niter set f rule options $ \{ count, index, prev, soFar, start } ->
-        case Array.uncons index /\ prev of
+    _niter set f rule options $ \{ index, remaining, prev, soFar, start } ->
+        case Array.uncons remaining /\ prev of
             Just { head, tail } /\ Start -> -- first iteration, remaining options are not empty
-                IterNext tail head (ChoiceOf count) start
+                IterNext tail head (ChoiceOf index) start
 
             remainingOptions /\ Prev prevStep -> -- following iteration, we check later if there are any options remaining
                 if not $ _failed prevStep.node then -- matched last option successfully, stop with informing about it
@@ -172,7 +172,7 @@ _choice set f rule options =
                 else -- still not matched, try further while there are options
                     case remainingOptions of
                         Just { head, tail } -> -- remaining options are not yet empty
-                            IterNext tail head (ChoiceOf count) start -- try further, return to the intitial state on the next iteration
+                            IterNext tail head (ChoiceOf index) start -- try further, return to the intitial state on the next iteration
                         Nothing -> -- out of options, but didn't match previously
                             IterStop start soFar $ Fail start.position $ ChoiceError { }
 
@@ -188,9 +188,9 @@ _repSep :: forall a. RuleSet -> (Rule -> a) -> Rule -> Rule -> P a
 _repSep set f rep sep = _unexpectedFail
 
 
-data IterStep idx a
+data IterStep rem a
     = IterStop State (Array (ASTNode a)) (Attempt a)
-    | IterNext idx Rule At State
+    | IterNext rem Rule At State
     | IterFail State
 
 
@@ -199,35 +199,35 @@ data IterPrev a
     | Prev (Step a Unit)
 
 
-type Iteration idx a =
-    { count :: Int
-    , index :: idx
+type Iteration rem a =
+    { index :: Int
+    , remaining :: rem
     , soFar :: Array (ASTNode a)
     , start :: State
     , prev :: IterPrev a
     }
 
 
-_niter :: forall idx a. RuleSet -> (Rule -> a) -> Rule -> idx -> (Iteration idx a -> IterStep idx a) -> P a
-_niter set f rule startIdx check =
+_niter :: forall rem a. RuleSet -> (Rule -> a) -> Rule -> rem -> (Iteration rem a -> IterStep rem a) -> P a
+_niter set f rule remaining check =
     Parser \state ->
-        iterStep state [] 0 $ check { count : 0, index : startIdx, soFar : [], start : state, prev : Start }
+        iterStep state [] 0 $ check { index : 0, remaining, soFar : [], start : state, prev : Start }
     where
-        iterStep :: State -> Array (ASTNode a) -> Int -> IterStep idx a -> Step _ Unit
+        iterStep :: State -> Array (ASTNode a) -> Int -> IterStep rem a -> Step _ Unit
         iterStep _ _ _ (IterFail state) = _unexpectedStep state
         iterStep _ _ _ (IterStop state chilren result) =
             { value : unit
             , rest : state
             , node : Node { rule, result } chilren
             }
-        iterStep start resultsSoFar count (IterNext nextIdx nextRule at state) =
+        iterStep start resultsSoFar index (IterNext remaining nextRule at state) =
             let
                 ruleParser = parseRule set f at nextRule
                 lastStep = step ruleParser state
                 soFar = Array.snoc resultsSoFar lastStep.node
-                nextCount = count + 1
+                nextIndex = index + 1 -- TODO: limit the number of attempts to prevent stack overflow
             in
-                iterStep start soFar nextCount $ check { count : nextCount, index : nextIdx, soFar, start, prev : Prev lastStep }
+                iterStep start soFar nextIndex $ check { index : nextIndex, remaining, soFar, start, prev : Prev lastStep }
 
 
 
