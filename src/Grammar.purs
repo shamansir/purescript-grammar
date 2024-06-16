@@ -91,7 +91,7 @@ data Error
     | RuleApplicationFailed { name :: RuleName, capture :: Maybe CaptureName }
     -- | RepeatError { occurence :: Int } -- { occurence :: Int, rep :: Error }
     -- | SeparatorError { occurence :: Int } -- { occurence :: Int, sep :: Error }
-    | RepSepError { occurence :: Int }
+    | RepSepHangingOperatorError { occurence :: Int }
     | SequenceError { index :: Int } -- { errors :: Array Error }
     | ChoiceError {} -- { errors :: Array Error }
     | PlaceholderError
@@ -257,7 +257,7 @@ instance Show a => Show (AST a) where
             case _ of
                 Sequence _ -> InSequence index
                 Choice _ -> ChoiceOf index
-                RepSep _ _ -> case index of
+                RepSep _ _ -> case index `mod` 2 of
                     0 -> RepOf
                     1 -> SepOf
                     _ -> Nil  -- shouldn't happen
@@ -282,7 +282,7 @@ instance Show Error where
         SequenceError { index } -> "Sequence failed at entry " <> show index
         -- RepeatError err -> "rep TODO"
         -- SeparatorError err -> "sep TODO"
-        RepSepError _ -> "repsep TODO"
+        RepSepHangingOperatorError _ -> "repsep TODO"
         EndOfInput -> "end of input"
         PlaceholderError -> "PLC"
         Unknown -> "UNK"

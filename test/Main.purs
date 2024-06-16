@@ -275,33 +275,52 @@ main = launchAff_ $ runSpec [consoleReporter] do
             , n_ref "nothing" { start : 1, end : 1 } $ l_text (Expected "" ) { start : 1, end : 1 }
             , n_ref_err "o" { pos : 1 } $ l_char_err (Expected 'o') (Found 'x') { pos : 1 }
             ]
-      {- it "parsing char choice" $
+      it "parsing char choice" $
         withgrm
           "o"
           "main :- ('f'|'o'|'o')."
-          "( 0 <main> choice 0-1 | ( 0 ch:1 char 0-1 ) )"
+          $ AST $ n_choice { start : 0, end : 1 }
+            [ l_char (Expected 'o') { at : 0 }
+            ]
       it "parsing char choice fails" $
         withgrm
           "x"
           "main :- ('f'|'o'|'o')."
-          "( 0 <main> choice 0-0 | < None of choices matched input :: <main> choice @0 | < Expected 'f', but found 'x' :: ch:0 char @0 > : < Expected 'o', but found 'x' :: ch:1 char @0 > : < Expected 'o', but found 'x' :: ch:2 char @0 > > )"
-          -- FIXME:
-          -- should better be either:
-          --        "< None of choices matched input :: <main> choice @0 | < Expected 'f', but found 'x' :: ch:0 char @0 > : < Expected 'o', but found 'x' :: ch:1 char @0 > : < Expected 'o', but found 'x' :: ch:2 char @0 > >"
-          -- ...or: "( 0 <main> choice 0-0 | < Expected 'f', but found 'x' :: rule:f char @0 > : < Expected 'o', but found 'x' :: rule:f char @0 > : < Expected 'o', but found 'x' :: rule:f char @0 > )"
-          -- it seems the choice failure is a single child of `Node` in this case
+          $ AST $ n_choice_err { pos : 0 }
+            [ l_char_err (Expected 'f') (Found 'x') { pos : 0 }
+            , l_char_err (Expected 'o') (Found 'x') { pos : 0 }
+            , l_char_err (Expected 'o') (Found 'x') { pos : 0 }
+            ]
       it "parsing rep/sep" $
           withgrm "f,o,o"
             """main :- repSep(fo,',').
             fo :- ('f'|'o').
             """
-            "( 0 <main> repsep 0-5 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 sep char 1-2 ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 sep char 3-4 ) : ( 0 rule:fo choice 4-5 | ( 0 ch:1 char 4-5 ) ) : < Expected ',', but found end-of-input :: sep char @5 > )"
+            $ AST $ n_rep_sep { start : 0, end : 5 }
+              [ n_ref "fo" { start : 0, end : 1 } $ n_choice { start : 0, end : 1 } [ l_char (Expected 'f') { at : 0 } ]
+              , l_char (Expected ',') { at : 1 }
+              , n_ref "fo" { start : 2, end : 3 } $ n_choice { start : 2, end : 3 } [ l_char (Expected 'f') { at : 2 } ]
+              , l_char (Expected ',') { at : 3 }
+              , n_ref "fo" { start : 4, end : 5 } $ n_choice { start : 4, end : 5 } [ l_char (Expected 'o') { at : 4 } ]
+              , l_char_err (Expected ',') EOI { pos : 5 }
+              ]
       it "parsing rep/sep fails when there's hanging separator" $
           withgrm "f,o,x"
             """main :- repSep(fo,',').
             fo :- ('f'|'o').
             """
-            "( 0 <main> repsep 0-4 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 sep char 1-2 ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : ( 0 sep char 3-4 ) : ( 0 rule:fo choice 4-4 | < None of choices matched input :: rule:fo choice @4 | < Expected 'f', but found 'x' :: ch:0 char @4 > : < Expected 'o', but found 'x' :: ch:1 char @4 > > ) : < Expected ',', but found 'x' :: sep char @4 > )"
+            $ AST $ n_rep_sep_err { pos : 4, entry : 3 }
+              [ n_ref "fo" { start : 0, end : 1 } $ n_choice { start : 0, end : 1 } [ l_char (Expected 'f') { at : 0 } ]
+              , l_char (Expected ',') { at : 1 }
+              , n_ref "fo" { start : 2, end : 3 } $ n_choice { start : 2, end : 3 } [ l_char (Expected 'f') { at : 2 } ]
+              , l_char (Expected ',') { at : 3 }
+              , n_ref_err "fo" { pos : 4 }
+                  $ n_choice_err { pos : 4 }
+                      [ l_char_err (Expected 'f') (Found 'x') { pos : 4 }
+                      , l_char_err (Expected 'o') (Found 'x') { pos : 4 }
+                      ]
+              ]
+      {-
       it "parsing rep/sep 2" $
         withgrm "foo"
           """main :- repSep(fo,"").
@@ -514,6 +533,20 @@ n_seq range items =
     items
 
 
+n_choice :: Range -> Array (ASTNode Int) -> ASTNode Int
+n_choice range items =
+  Node
+    { rule : Choice $ ruleOf <$> items, result : Match range 0 }
+    items
+
+
+n_rep_sep :: Range -> Array (ASTNode Int) -> ASTNode Int
+n_rep_sep range items =
+  Node
+    { rule : RepSep None None, result : Match range 0 }
+    items
+
+
 n_ref_err :: String -> { pos :: Int } -> ASTNode Int -> ASTNode Int
 n_ref_err ruleName { pos } rulenode =
   Node
@@ -525,6 +558,20 @@ n_seq_err :: { pos :: Int, entry :: Int } -> Array (ASTNode Int) -> ASTNode Int
 n_seq_err { pos, entry } items =
   Node
     { rule : Sequence $ ruleOf <$> items, result : Fail pos $ SequenceError { index : entry } }
+    items
+
+
+n_choice_err :: { pos :: Int } -> Array (ASTNode Int) -> ASTNode Int
+n_choice_err { pos } items =
+  Node
+    { rule : Choice $ ruleOf <$> items, result : Fail pos $ ChoiceError { } }
+    items
+
+
+n_rep_sep_err :: { pos :: Int, entry :: Int } -> Array (ASTNode Int) -> ASTNode Int
+n_rep_sep_err { pos, entry } items =
+  Node
+    { rule : RepSep None None, result : Fail pos $ RepSepHangingOperatorError { occurence : entry } }
     items
 
 

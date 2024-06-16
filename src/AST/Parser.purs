@@ -366,6 +366,7 @@ _failedAttempt (Match _ _) = false
 _failedAttempt (Fail _ _) = true
 
 
+{-
 _makeError :: String -> Rule -> Error
 _makeError substr =
     case _ of
@@ -377,7 +378,7 @@ _makeError substr =
         Choice _ -> ChoiceError { }
         Sequence _ -> SequenceError { index : 0 }  -- FIXME
         Ref mbCapture name -> RuleNotFoundError { name, capture : mbCapture }
-        RepSep _ _ -> RepSepError { occurence : 0 } -- FIXME
+        RepSep _ _ -> RepSepHangingOperatorError { occurence : 0 } -- FIXME
         Placeholder -> PlaceholderError
         None -> Unknown
     where
@@ -385,3 +386,4 @@ _makeError substr =
             if String.length substr > 0 then G.found $ String.take (String.length expected) substr else G.eoi
         qfoundchar =
             String.take 1 >>> SCU.charAt 0 >>> maybe G.eoi G.found -- FIXME: EOL/EOF
+-}
