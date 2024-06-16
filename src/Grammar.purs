@@ -279,7 +279,7 @@ instance Show Error where
         ChoiceError _ -> "None of choices matched input"
         RuleNotFoundError err -> "Rule `" <> err.name <> "` was not found"
         RuleApplicationFailed err -> "Rule `" <> err.name <> "` didn't match"
-        SequenceError _ -> "sequence TODO"
+        SequenceError { index } -> "Sequence failed at entry " <> show index
         -- RepeatError err -> "rep TODO"
         -- SeparatorError err -> "sep TODO"
         RepSepError _ -> "repsep TODO"

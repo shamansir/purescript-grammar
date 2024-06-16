@@ -149,18 +149,18 @@ _sequence set f rule seq =
             Just { head, tail } /\ Start -> -- first iteration, remaining sequence is not empty
                 IterNext tail head (InSequence index) start
 
-            Just { head, tail } /\ Prev prevStep ->
+            Just { head, tail } /\ Prev pidx prevStep ->
                 if not $ _failed prevStep.node then -- continue while matching, advance the state
                     IterNext tail head (InSequence index) prevStep.rest
                 else -- stop with the failure when rule failed
                     IterStop prevStep.rest soFar
-                        $ Fail (_.position prevStep.rest) $ SequenceError { index }
+                        $ Fail (_.position prevStep.rest) $ SequenceError { index : pidx }
 
-            Nothing /\ Prev prevStep ->
+            Nothing /\ Prev pidx prevStep ->
                 IterStop prevStep.rest soFar $ if not $ _failed prevStep.node then -- the last item matched, all is good
                     Match { start : start.position, end : _.position prevStep.rest } $ f irule
                 else -- the sequence is finished, but the last rule failed to match, fail
-                    Fail (_.position prevStep.rest) $ SequenceError { index }
+                    Fail (_.position prevStep.rest) $ SequenceError { index : pidx }
 
             Nothing /\ Start -> -- when there are no rules specfieid in a sequence, it always matches as empty
                 IterStop start soFar $ Match { start : start.position, end : start.position } $ f irule
@@ -173,7 +173,7 @@ _choice set f rule options =
             Just { head, tail } /\ Start -> -- first iteration, remaining options are not empty
                 IterNext tail head (ChoiceOf index) start
 
-            remainingOptions /\ Prev prevStep -> -- following iteration, we check later if there are any options remaining
+            remainingOptions /\ Prev _ prevStep -> -- following iteration, we check later if there are any options remaining
                 if not $ _failed prevStep.node then -- matched last option successfully, stop with informing about it
                     IterStop prevStep.rest [ prevStep.node ]
                         $ Match { start : start.position, end : _.position prevStep.rest }
@@ -203,7 +203,7 @@ _repSep set f rule { rep, sep } =
             Sep /\ Start ->
                 IterFail start -- should be impossible!
 
-            repOrSep /\ Prev prevStep ->
+            repOrSep /\ Prev _ prevStep ->
                 if not $ _failed prevStep.node then
                     case repOrSep of
                         Rep -> IterNext Sep rep RepOf prevStep.rest
@@ -244,7 +244,7 @@ data IterStep rem a
 
 data IterPrev a
     = Start
-    | Prev (Step a Unit)
+    | Prev Int (Step a Unit)
 
 
 type Iteration rem a =
@@ -276,7 +276,7 @@ _niter set f rule remaining check =
                 soFar = Array.snoc resultsSoFar lastStep.node
                 nextIndex = index + 1 -- TODO: limit the number of attempts to prevent stack overflow
             in
-                iterStep start soFar nextIndex $ check { index : nextIndex, remaining, soFar, start, prev : Prev lastStep, irule : nextRule }
+                iterStep start soFar nextIndex $ check { index : nextIndex, remaining, soFar, start, prev : Prev index lastStep, irule : nextRule }
 
 
 

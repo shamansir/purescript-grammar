@@ -8,6 +8,7 @@ import Effect.Class.Console (log)
 import Control.Monad.Error.Class (class MonadThrow)
 import Effect.Exception (Error) as Ex
 
+import Data.Maybe (Maybe(..))
 import Data.Either (Either(..))
 import Data.Bifunctor (lmap)
 
@@ -21,7 +22,7 @@ import Test.Spec.Runner (runSpec)
 import Node.Encoding (Encoding(..)) as Encoding
 import Node.FS.Sync (readTextFile, writeTextFile)
 
-import Grammar (Grammar, AST(..), ASTNode(..), Tree(..), Rule(..), Attempt(..), Expected(..), Found(..), Error(..), CharRule(..), CharX(..), ruleOf)
+import Grammar (Grammar, AST(..), ASTNode(..), Tree(..), Rule(..), Attempt(..), Expected(..), Found(..), Error(..), CharRule(..), CharX(..), ruleOf, Range)
 import Grammar.Parser (parser) as Grammar
 import AST.Parser (parse) as WithGrammar
 
@@ -145,91 +146,110 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm
           "?"
           """main :- "foo"."""
-          $ AST $ l_text_err "foo" (Found "?") 0
+          $ AST $ l_text_err (Expected "foo") (Found "?") { pos : 0 }
       it "parsing strings" $
         withgrm
           "foo"
           """main :- "foo"."""
-          $ AST $ l_text "foo" 0 3
+          $ AST $ l_text (Expected "foo") { start : 0, end : 3 }
       it "parsing strings at end-of-input" $
         withgrm
           ""
           """main :- "foo"."""
-          $ AST $ l_text_err "foo" EOI 0
+          $ AST $ l_text_err (Expected "foo") EOI { pos : 0 }
       it "parsing strings fails 2" $
         withgrm
           "foa"
           """main :- "foo"."""
-          $ AST $ l_text_err "foo" (Found "foa") 0
+          $ AST $ l_text_err (Expected "foo") (Found "foa") { pos : 0 }
       it "parsing chars" $
         withgrm
           "f"
           "main :- 'f'."
-          $ AST $ l_char 'f' 0
+          $ AST $ l_char (Expected 'f') { at : 0 }
       it "parsing chars fails" $
         withgrm
           "g"
           "main :- 'f'."
-          $ AST $ l_char_err 'f' (Found 'g') 0
+          $ AST $ l_char_err (Expected 'f') (Found 'g') { pos : 0 }
       it "parsing negated chars" $
         withgrm
           "o"
           "main :- ^'f'."
-          $ AST $ l_neg_char 'f' 0
+          $ AST $ l_neg_char (Expected 'f') { at : 0 }
       it "parsing negated chars fails" $
         withgrm
           "f"
           "main :- ^'f'."
-          $ AST $ l_neg_char_err 'f' 0
+          $ AST $ l_neg_char_err (Expected 'f') { pos : 0 }
       it "parsing char ranges" $
         withgrm
           "f"
           "main :- [c-g]."
-          $ AST $ l_char_rng { from : 'c', to : 'g' } 0 -- FIXME: passed rule info is not shown so with any from/to this test passes
+          $ AST $ l_char_rng { from : 'c', to : 'g' } { at : 0 } -- FIXME: passed rule info is not shown so with any from/to this test passes
       it "parsing char ranges fails" $
         withgrm
           "a"
           "main :- [c-g]."
-          $ AST $ l_char_rng_err { from : 'c', to : 'g' } (Found 'a') 0
+          $ AST $ l_char_rng_err { from : 'c', to : 'g' } (Found 'a') { pos : 0 }
       it "parsing char sequences" $
         withgrm
           "foo"
           "main :- ['f','o','o']."
-          $ AST $ n_seq 0 3
-            [ l_char 'f' 0
-            , l_char 'o' 1
-            , l_char 'o' 2
+          $ AST $ n_seq { start : 0, end : 3 }
+            [ l_char (Expected 'f') { at : 0 }
+            , l_char (Expected 'o') { at : 1 }
+            , l_char (Expected 'o') { at : 2 }
             ]
-          -- "( 0 <main> seqnc 0-3 | ( 0 seq:0 char 0-1 ) : ( 0 seq:1 char 1-2 ) : ( 0 seq:2 char 2-3 ) )"
-      {- it "parsing char sequences fails" $
+      it "parsing char sequences fails" $
         withgrm
           "fxo"
           "main :- ['f','o','o']."
-          "( 0 <main> seqnc 0-3 | ( 0 seq:0 char 0-1 ) : < Expected 'o', but found 'x' :: seq:1 char @1 > : ( 0 seq:2 char 2-3 ) )"
+          $ AST $ n_seq_err { pos : 1, entry : 1 }
+            [ l_char (Expected 'f') { at : 0 }
+            , l_char_err (Expected 'o') (Found 'x') { pos : 1 }
+            ]
       it "parsing any-char sequences" $
         withgrm
           "foo"
           "main :- [.,.,.]."
-          "( 0 <main> seqnc 0-3 | ( 0 seq:0 any 0-1 ) : ( 0 seq:1 any 1-2 ) : ( 0 seq:2 any 2-3 ) )"
+          $ AST $ n_seq { start : 0, end : 3 }
+            [ l_char_any { at : 0 }
+            , l_char_any { at : 1 }
+            , l_char_any { at : 2 }
+            ]
       it "parsing any-char sequences fails" $
         withgrm
           "fo"
           "main :- [.,.,.]."
-          "( 0 <main> seqnc 0-2 | ( 0 seq:0 any 0-1 ) : ( 0 seq:1 any 1-2 ) : < Expected any character, but found end-of-input :: seq:2 any @2 > )"
+          $ AST $ n_seq_err { pos : 2, entry : 2 }
+            [ l_char_any { at : 0 }
+            , l_char_any { at : 1 }
+            , l_char_any_err EOI { pos : 2 }
+            ]
       it "parsing char's and rule sequences" $
         withgrm "foo"
           """main :- [f,o,o].
           f :- 'f'.
           o :- 'o'.
           """
-          "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:o char 1-2 ) : ( 0 rule:o char 2-3 ) )"
+          $ AST $ n_seq { start : 0, end : 3 }
+            [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
+            , n_ref "o" { start : 1, end : 2 } $ l_char (Expected 'o') { at : 1 }
+            , n_ref "o" { start : 2, end : 3 } $ l_char (Expected 'o') { at : 2 }
+            ]
       it "parsing char's and rule sequences fails" $
         withgrm "foo"
           """main :- [f,o,f].
           f :- 'f'.
           o :- 'o'.
           """
-          "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:o char 1-2 ) : < Expected 'f', but found 'o' :: rule:f char @2 > )" -- TODO: must be failed character rule inside `rule:f`
+          $ AST $ n_seq_err { pos : 2, entry : 2 }
+            [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
+            , n_ref "o" { start : 1, end : 2 } $ l_char (Expected 'o') { at : 1 }
+            , n_ref_err "o" { pos : 2 } $ l_char_err (Expected 'f') (Found 'o') { pos : 2 }
+            ]
+          -- "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:o char 1-2 ) : < Expected 'f', but found 'o' :: rule:f char @2 > )" -- TODO: must be failed character rule inside `rule:f`
       it "parsing sequences with empty items" $
         withgrm "foo"
           """main :- [f,nothing,o,nothing,o].
@@ -237,8 +257,15 @@ main = launchAff_ $ runSpec [consoleReporter] do
           o :- 'o'.
           nothing :- "".
           """
-          "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:nothing text 1-1 ) : ( 0 rule:o char 1-2 ) : ( 0 rule:nothing text 2-2 ) : ( 0 rule:o char 2-3 ) )"
-      it "parsing sequences with empty items fails" $
+          $ AST $ n_seq { start : 0, end : 3 }
+            [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
+            , n_ref "nothing" { start : 1, end : 1 } $ l_text (Expected "" ) { start : 1, end : 1 }
+            , n_ref "o" { start : 1, end : 2 } $ l_char (Expected 'o') { at : 1 }
+            , n_ref "nothing" { start : 2, end : 2 } $ l_text (Expected "" ) { start : 2, end : 2 }
+            , n_ref "o" { start : 2, end : 3 } $ l_char (Expected 'o') { at : 2 }
+            ]
+          -- "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:nothing text 1-1 ) : ( 0 rule:o char 1-2 ) : ( 0 rule:nothing text 2-2 ) : ( 0 rule:o char 2-3 ) )"
+      {- it "parsing sequences with empty items fails" $
         withgrm "fxo"
           """main :- [f,nothing,o,nothing,o].
           f :- 'f'.
@@ -428,45 +455,74 @@ main = launchAff_ $ runSpec [consoleReporter] do
 -}
 
 
-l_char :: Char -> Int -> ASTNode Int
-l_char ch start = Leaf { rule : CharRule $ Single $ Raw ch, result : Match { start, end : start + 1 } 0 }
+l_char :: Expected Char -> { at :: Int } -> ASTNode Int
+l_char (Expected ch) { at } = Leaf { rule : CharRule $ Single $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
 
 
-l_neg_char :: Char -> Int -> ASTNode Int
-l_neg_char ch start = Leaf { rule : CharRule $ Not $ Raw ch, result : Match { start, end : start + 1 } 0 }
+l_neg_char :: Expected Char -> { at :: Int } -> ASTNode Int
+l_neg_char (Expected ch) { at } = Leaf { rule : CharRule $ Not $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
 
 
-l_char_rng :: { from :: Char, to :: Char } -> Int -> ASTNode Int
-l_char_rng { from, to } start = Leaf { rule : CharRule $ Range from to, result : Match { start, end : start + 1 } 0 }
+l_char_rng :: { from :: Char, to :: Char } -> { at :: Int } -> ASTNode Int
+l_char_rng { from, to } { at } = Leaf { rule : CharRule $ Range from to, result : Match { start : at, end : at + 1 } 0 }
 
 
-l_text :: String -> Int -> Int -> ASTNode Int
-l_text text start end = Leaf { rule : Text text, result : Match { start, end } 0 }
+l_char_any :: { at :: Int } -> ASTNode Int
+l_char_any { at } = Leaf { rule : CharRule Any, result : Match { start : at, end : at + 1 } 0 }
 
 
-l_char_err :: Char -> Found Char -> Int -> ASTNode Int
-l_char_err ch found position =
-  Leaf { rule : CharRule $ Single $ Raw ch, result : Fail position $ CharacterError { expected : Expected $ Raw ch, found : found }  }
+l_text :: Expected String -> Range -> ASTNode Int
+l_text (Expected text) range = Leaf { rule : Text text, result : Match range 0 }
 
 
-l_neg_char_err :: Char -> Int -> ASTNode Int
-l_neg_char_err ch position =
-  Leaf { rule : CharRule $ Not $ Raw ch, result : Fail position $ NegCharacterError { notExpected : Expected $ Raw ch, found : Found ch }  }
+l_char_err :: Expected Char -> Found Char -> { pos :: Int } -> ASTNode Int
+l_char_err (Expected ch) found { pos } =
+  Leaf { rule : CharRule $ Single $ Raw ch, result : Fail pos $ CharacterError { expected : Expected $ Raw ch, found : found }  }
 
 
-l_char_rng_err :: { from :: Char, to :: Char } -> Found Char -> Int -> ASTNode Int
-l_char_rng_err { from, to } found position = Leaf { rule : CharRule $ Range from to, result : Fail position $ CharacterRangeError { found, from : Expected from, to : Expected to }  }
+l_neg_char_err :: Expected Char -> { pos :: Int } -> ASTNode Int
+l_neg_char_err (Expected ch) { pos } =
+  Leaf { rule : CharRule $ Not $ Raw ch, result : Fail pos $ NegCharacterError { notExpected : Expected $ Raw ch, found : Found ch }  }
 
 
-l_text_err :: String -> Found String -> Int -> ASTNode Int
-l_text_err text found position =
-  Leaf { rule : Text text, result : Fail position $ TextError { expected : Expected text, found : found }  }
+l_char_rng_err :: { from :: Char, to :: Char } -> Found Char -> { pos :: Int } -> ASTNode Int
+l_char_rng_err { from, to } found { pos } = Leaf { rule : CharRule $ Range from to, result : Fail pos $ CharacterRangeError { found, from : Expected from, to : Expected to } }
 
 
-n_seq :: Int -> Int -> Array (ASTNode Int) -> ASTNode Int
-n_seq start end items =
+l_char_any_err :: Found Char -> { pos :: Int } -> ASTNode Int
+l_char_any_err found { pos } = Leaf { rule : CharRule Any, result : Fail pos $ AnyCharacterError { found } }
+
+
+l_text_err :: Expected String -> Found String -> { pos :: Int } -> ASTNode Int
+l_text_err (Expected text) found { pos } =
+  Leaf { rule : Text text, result : Fail pos $ TextError { expected : Expected text, found : found }  }
+
+
+n_ref :: String -> Range -> ASTNode Int -> ASTNode Int
+n_ref ruleName range rulenode =
   Node
-    { rule : Sequence $ ruleOf <$> items, result : Match { start, end } 0 }
+    { rule : Ref Nothing ruleName, result : Match range 0 }
+    [ rulenode ]
+
+
+n_seq :: Range -> Array (ASTNode Int) -> ASTNode Int
+n_seq range items =
+  Node
+    { rule : Sequence $ ruleOf <$> items, result : Match range 0 }
+    items
+
+
+n_ref_err :: String -> { pos :: Int } -> ASTNode Int -> ASTNode Int
+n_ref_err ruleName { pos } rulenode =
+  Node
+    { rule : Ref Nothing ruleName, result : Fail pos $ RuleApplicationFailed { capture : Nothing, name : ruleName } }
+    [ rulenode ]
+
+
+n_seq_err :: { pos :: Int, entry :: Int } -> Array (ASTNode Int) -> ASTNode Int
+n_seq_err { pos, entry } items =
+  Node
+    { rule : Sequence $ ruleOf <$> items, result : Fail pos $ SequenceError { index : entry } }
     items
 
 
