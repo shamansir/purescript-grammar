@@ -304,7 +304,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
               , n_ref "fo" { start : 4, end : 5 } $ n_choice { start : 4, end : 5 } [ l_char (Expected 'o') { at : 4 } ]
               , l_char_err (Expected ',') EOI { pos : 5 }
               ]
-      it "parsing rep/sep fails when there's hanging separator" $
+      it "parsing rep/sep fails when there's hanging separator in input" $ -- or else we could use sequence?
           withgrm "f,o,x"
             """main :- repSep(fo,',').
             fo :- ('f'|'o').
@@ -320,45 +320,71 @@ main = launchAff_ $ runSpec [consoleReporter] do
                       , l_char_err (Expected 'o') (Found 'x') { pos : 4 }
                       ]
               ]
-      {-
-      it "parsing rep/sep 2" $
+      it "parsing rep/sep with empty separators" $
         withgrm "foo"
           """main :- repSep(fo,"").
           fo :- ('f'|'o').
           """
-          "( 0 <main> repsep 0-3 | ( 0 rule:fo choice 0-1 | ( 0 ch:0 char 0-1 ) ) : ( 0 sep text 1-1 ) : ( 0 rule:fo choice 1-2 | ( 0 ch:1 char 1-2 ) ) : ( 0 sep text 2-2 ) : ( 0 rule:fo choice 2-3 | ( 0 ch:1 char 2-3 ) ) : < Expected '', but found end-of-input :: sep text @3 > )"
-      it "parsing rep/sep when empty" $
+          $ AST $ n_rep_sep { start : 0, end : 3 }
+              [ n_ref "fo" { start : 0, end : 1 } $ n_choice { start : 0, end : 1 } [ l_char (Expected 'f') { at : 0 } ]
+              , l_text (Expected "") { start : 1, end : 1 }
+              , n_ref "fo" { start : 1, end : 2 } $ n_choice { start : 1, end : 2 } [ l_char (Expected 'f') { at : 1 } ]
+              , l_text (Expected "") { start : 2, end : 2 }
+              , n_ref "fo" { start : 2, end : 3 } $ n_choice { start : 2, end : 3 } [ l_char (Expected 'o') { at : 2 } ]
+              , l_text_err (Expected "") EOI { pos : 3 }
+              ]
+      it "parsing rep/sep when input is empty (should pass)" $
         withgrm ""
           """main :- repSep(" ","\n")."""
-          "( 0 <main> repsep 0-0 | < Expected ' ', but found end-of-input :: rep text @0 > )"
-      it "parsing rep/sep when empty 2" $
+          -- $ AST $ n_rep_sep_err { pos : 0, entry : 0 } -- TODO: or should it fail?
+          $ AST $ n_rep_sep { start : 0, end : 0 }
+            [ l_text_err (Expected " ") EOI { pos : 0 }
+            ]
+      it "parsing rep/sep when input starts with separator (should fail)" $
         withgrm "\n"
           """main :- repSep(" ","\n")."""
-          "( 0 <main> repsep 0-0 | < Expected ' ', but found '\n' :: rep text @0 > )"
-      -- pending' "parsing rep/sep when empty 3" $
-      --  withgrm ""
-      --    """main :- repSep("","")."""
-      --    "( 0 <main> repsep 0-0 | ∅)"
-      it "parsing rep/sep when empty 4" $
+          $ AST $ n_rep_sep_err { pos : 0, entry : 0 }
+            [ l_text_err (Expected " ") (Found "\n") { pos : 0 }
+            ]
+      it "parsing rep/sep when input is empty, but also rep & sep are both empty as well  (should pass)" $
+        withgrm ""
+          """main :- repSep("","")."""
+          $ AST $ n_rep_sep { start : 0, end : 0 }
+            [ l_text_err (Expected "") EOI { pos : 0 }
+            ]
+      it "parsing rep/sep when input is empty, but both rep & sep are non-empty (should pass)" $
         withgrm ""
           """main :- repSep("a","b")."""
-          "( 0 <main> repsep 0-0 | < Expected 'a', but found end-of-input :: rep text @0 > )"
-      it "parsing rep/sep when empty 5" $
+          $ AST $ n_rep_sep { start : 0, end : 0 }
+            [ l_text_err (Expected "a") EOI { pos : 0 }
+            ]
+      it "parsing rep/sep when input is empty, sep is empty, but rep is non-enpty (should pass)" $
         withgrm ""
           """main :- repSep("a","")."""
-          "( 0 <main> repsep 0-0 | < Expected 'a', but found end-of-input :: rep text @0 > )"
-      it "parsing rep/sep when empty 6" $
+          $ AST $ n_rep_sep { start : 0, end : 0 }
+            [ l_text_err (Expected "a") EOI { pos : 0 }
+            ]
+      it "parsing rep/sep when input is empty, sep is empty, ane rep is char rule (should pass)" $
         withgrm ""
           """main :- repSep('a',"")."""
-          "( 0 <main> repsep 0-0 | < Expected 'a', but found end-of-input :: rep char @0 > )"
-      it "parsing rep/sep with single element" $
+          $ AST $ n_rep_sep { start : 0, end : 0 }
+            [ l_char_err (Expected 'a') EOI { pos : 0 }
+            ]
+      it "parsing rep/sep with single rep element (should pass)" $
         withgrm "2"
           """main :- repSep("2","")."""
-          "( 0 <main> repsep 0-1 | ( 0 rep text 0-1 ) : < Expected '', but found end-of-input :: sep text @1 > )"
-      it "parsing rep/sep with single element as char sequence" $
+          $ AST $ n_rep_sep { start : 0, end : 1 }
+            [ l_text (Expected "2") { start : 0, end : 1 }
+            , l_text_err (Expected "") EOI { pos : 1 }
+            ]
+      it "parsing rep/sep with single element as char sequence (should pass)" $
         withgrm "2"
           """main :- repSep([0-9],"")."""
-          "( 0 <main> repsep 0-1 | ( 0 rep char-range 0-1 ) : < Expected '', but found end-of-input :: sep text @1 > )"
+          $ AST $ n_rep_sep { start : 0, end : 1 }
+            [ l_char_rng { from : '0', to : '9' } { at : 0 }
+            , l_text_err (Expected "") EOI { pos : 1 }
+            ]
+      {-
       it "capture works" $
         withgrm "[a-z]"
           """main :- ['[',from:char,'-',to:char,']'].
