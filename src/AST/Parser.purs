@@ -222,7 +222,11 @@ _ref set f rule mbCapture ruleName =
             rest = maybe state _.rest mbRuleStep
             result =
                 case mbRuleStep of
-                    Just ruleStep -> Match { start : state.position, end : _.position $ ruleStep.rest } $ f rule
+                    Just ruleStep ->
+                        if (not $ _failed ruleStep.node) then
+                            Match { start : state.position, end : _.position $ ruleStep.rest } $ f rule
+                        else
+                            Fail state.position $ RuleApplicationFailed { name : ruleName, capture : mbCapture }
                     Nothing -> Fail state.position
                                     $ maybe
                                         (RuleApplicationFailed { name : ruleName, capture : mbCapture })

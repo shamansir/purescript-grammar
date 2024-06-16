@@ -247,9 +247,8 @@ main = launchAff_ $ runSpec [consoleReporter] do
           $ AST $ n_seq_err { pos : 2, entry : 2 }
             [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
             , n_ref "o" { start : 1, end : 2 } $ l_char (Expected 'o') { at : 1 }
-            , n_ref_err "o" { pos : 2 } $ l_char_err (Expected 'f') (Found 'o') { pos : 2 }
+            , n_ref_err "f" { pos : 2 } $ l_char_err (Expected 'f') (Found 'o') { pos : 2 }
             ]
-          -- "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:o char 1-2 ) : < Expected 'f', but found 'o' :: rule:f char @2 > )" -- TODO: must be failed character rule inside `rule:f`
       it "parsing sequences with empty items" $
         withgrm "foo"
           """main :- [f,nothing,o,nothing,o].
@@ -264,16 +263,19 @@ main = launchAff_ $ runSpec [consoleReporter] do
             , n_ref "nothing" { start : 2, end : 2 } $ l_text (Expected "" ) { start : 2, end : 2 }
             , n_ref "o" { start : 2, end : 3 } $ l_char (Expected 'o') { at : 2 }
             ]
-          -- "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:nothing text 1-1 ) : ( 0 rule:o char 1-2 ) : ( 0 rule:nothing text 2-2 ) : ( 0 rule:o char 2-3 ) )"
-      {- it "parsing sequences with empty items fails" $
+      it "parsing sequences with empty items fails" $
         withgrm "fxo"
           """main :- [f,nothing,o,nothing,o].
           f :- 'f'.
           o :- 'o'.
           nothing :- "".
           """
-          "( 0 <main> seqnc 0-3 | ( 0 rule:f char 0-1 ) : ( 0 rule:nothing text 1-1 ) : < Expected 'o', but found 'x' :: rule:o char @1 > : ( 0 rule:nothing text 2-2 ) : ( 0 rule:o char 2-3 ) )"
-      it "parsing char choice" $
+          $ AST $ n_seq_err { pos : 1, entry : 2 }
+            [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
+            , n_ref "nothing" { start : 1, end : 1 } $ l_text (Expected "" ) { start : 1, end : 1 }
+            , n_ref_err "o" { pos : 1 } $ l_char_err (Expected 'o') (Found 'x') { pos : 1 }
+            ]
+      {- it "parsing char choice" $
         withgrm
           "o"
           "main :- ('f'|'o'|'o')."
