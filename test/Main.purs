@@ -656,20 +656,32 @@ main = launchAff_ $ runSpec [consoleReporter] do
                   ]
 
 
-{-
-      it "parses `blocks`" $
+      pending' "parses `blocks`" $
         withgrmfile "blocks"
-      it "parses `grammar`" $
+      it "parses `contracts`" $
+        withgrmfile "contracts"
+      it "parses `datalog`" $
+        withgrmfile "datalog"
+      it "parses `datalog2`" $
+        withgrmfile "datalog2"
+      it "parses `fp`" $
+        withgrmfile "fp"
+      pending' "parses `grammar`" $
         withgrmfile "grammar"
       it "parses `json`" $
         withgrmfile "json"
+      pending' "parses `modelica`" $
+        withgrmfile "modelica"
+      pending' "parses `opt`" $
+        withgrmfile "opt"
       it "parses `plainText`" $
         withgrmfile "plainText"
-      it "parses `fp`" $
-        withgrmfile "fp"
-      it "parses `test`" $
-        withgrmfile "test"
--}
+      it "parses `sql`" $
+        withgrmfile "sql"
+      -- it "parses `test`" $
+      --   withgrmfile "test"
+      it "parses `treeSql`" $
+        withgrmfile "treeSql"
 
 
 l_char :: Expected Char -> { at :: Int } -> ASTNode Int
