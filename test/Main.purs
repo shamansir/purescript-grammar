@@ -280,7 +280,8 @@ main = launchAff_ $ runSpec [consoleReporter] do
           "o"
           "main :- ('f'|'o'|'o')."
           $ AST $ n_choice { start : 0, end : 1 }
-            [ l_char (Expected 'o') { at : 0 }
+            [ l_char_err (Expected 'f') (Found 'o') { pos : 0 }
+            , l_char (Expected 'o') { at : 0 }
             ]
       it "parsing char choice fails" $
         withgrm
@@ -297,22 +298,38 @@ main = launchAff_ $ runSpec [consoleReporter] do
             fo :- ('f'|'o').
             """
             $ AST $ n_rep_sep { start : 0, end : 5 }
-              [ n_ref "fo" { start : 0, end : 1 } $ n_choice { start : 0, end : 1 } [ l_char (Expected 'f') { at : 0 } ]
+              [ n_ref "fo" { start : 0, end : 1 }
+                  $ n_choice { start : 0, end : 1 }
+                      [ l_char (Expected 'f') { at : 0 } ]
               , l_char (Expected ',') { at : 1 }
-              , n_ref "fo" { start : 2, end : 3 } $ n_choice { start : 2, end : 3 } [ l_char (Expected 'f') { at : 2 } ]
+              , n_ref "fo" { start : 2, end : 3 }
+                  $ n_choice { start : 2, end : 3 }
+                      [ l_char_err (Expected 'f') (Found 'o') { pos : 2 }
+                      , l_char (Expected 'f') { at : 2 }
+                      ]
               , l_char (Expected ',') { at : 3 }
-              , n_ref "fo" { start : 4, end : 5 } $ n_choice { start : 4, end : 5 } [ l_char (Expected 'o') { at : 4 } ]
+              , n_ref "fo" { start : 4, end : 5 }
+                  $ n_choice { start : 4, end : 5 }
+                      [ l_char_err (Expected 'f') (Found 'o') { pos : 4 }
+                      , l_char (Expected 'o') { at : 4 }
+                      ]
               , l_char_err (Expected ',') EOI { pos : 5 }
               ]
-      it "parsing rep/sep fails when there's hanging separator in input" $ -- or else we could use sequence?
+      it "parsing rep/sep fails when there's hanging separator in input (should fail)" $ -- or else we could use sequence?
           withgrm "f,o,x"
             """main :- repSep(fo,',').
             fo :- ('f'|'o').
             """
             $ AST $ n_rep_sep_err { pos : 4, entry : 3 }
-              [ n_ref "fo" { start : 0, end : 1 } $ n_choice { start : 0, end : 1 } [ l_char (Expected 'f') { at : 0 } ]
+              [ n_ref "fo" { start : 0, end : 1 }
+                  $ n_choice { start : 0, end : 1 }
+                      [ l_char (Expected 'f') { at : 0 } ]
               , l_char (Expected ',') { at : 1 }
-              , n_ref "fo" { start : 2, end : 3 } $ n_choice { start : 2, end : 3 } [ l_char (Expected 'f') { at : 2 } ]
+              , n_ref "fo" { start : 2, end : 3 }
+                  $ n_choice { start : 2, end : 3 }
+                      [ l_char_err (Expected 'f') (Found 'o') { pos : 2 }
+                      , l_char (Expected 'f') { at : 2 }
+                      ]
               , l_char (Expected ',') { at : 3 }
               , n_ref_err "fo" { pos : 4 }
                   $ n_choice_err { pos : 4 }
@@ -320,7 +337,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
                       , l_char_err (Expected 'o') (Found 'x') { pos : 4 }
                       ]
               ]
-      it "parsing rep/sep with empty separators" $
+      it "parsing rep/sep with empty separators (should pass)" $
         withgrm "foo"
           """main :- repSep(fo,"").
           fo :- ('f'|'o').
@@ -328,9 +345,9 @@ main = launchAff_ $ runSpec [consoleReporter] do
           $ AST $ n_rep_sep { start : 0, end : 3 }
               [ n_ref "fo" { start : 0, end : 1 } $ n_choice { start : 0, end : 1 } [ l_char (Expected 'f') { at : 0 } ]
               , l_text (Expected "") { start : 1, end : 1 }
-              , n_ref "fo" { start : 1, end : 2 } $ n_choice { start : 1, end : 2 } [ l_char (Expected 'f') { at : 1 } ]
+              , n_ref "fo" { start : 1, end : 2 } $ n_choice { start : 1, end : 2 } [ l_char_err (Expected 'f') (Found 'o') { pos : 1 }, l_char (Expected 'f') { at : 1 } ]
               , l_text (Expected "") { start : 2, end : 2 }
-              , n_ref "fo" { start : 2, end : 3 } $ n_choice { start : 2, end : 3 } [ l_char (Expected 'o') { at : 2 } ]
+              , n_ref "fo" { start : 2, end : 3 } $ n_choice { start : 2, end : 3 } [ l_char_err (Expected 'f') (Found 'o') { pos : 2 }, l_char (Expected 'o') { at : 2 } ]
               , l_text_err (Expected "") EOI { pos : 3 }
               ]
       it "parsing rep/sep when input is empty (should pass)" $
@@ -384,78 +401,154 @@ main = launchAff_ $ runSpec [consoleReporter] do
             [ l_char_rng { from : '0', to : '9' } { at : 0 }
             , l_text_err (Expected "") EOI { pos : 1 }
             ]
-      {-
       it "capture works" $
         withgrm "[a-z]"
           """main :- ['[',from:char,'-',to:char,']'].
           char :- ('a'|'z').
           """
-          "( 0 <main> seqnc 0-5 | ( 0 seq:0 char 0-1 ) : ( 0 rule:from choice 1-2 | ( 0 ch:0 char 1-2 ) ) : ( 0 seq:2 char 2-3 ) : ( 0 rule:to choice 3-4 | ( 0 ch:1 char 3-4 ) ) : ( 0 seq:4 char 4-5 ) )"
+          $ AST $ n_seq { start : 0, end : 5 }
+            [ l_char (Expected '[') { at : 0 }
+            , n_ref_capt { name : "char", as : "from" } { start : 1, end : 2 }
+                $ n_choice { start : 1, end : 2 }
+                  [ l_char (Expected 'a') { at : 1 }
+                  ] -- FIXME: even when passed, choice should store failed tries so that they match by index
+            , l_char (Expected '-') { at : 2 }
+            , n_ref_capt { name : "char", as : "to" } { start : 3, end : 4 }
+                $ n_choice { start : 3, end : 4 }
+                  [ l_char_err (Expected 'a') (Found 'z') { pos : 3 }
+                  , l_char (Expected 'z') { at : 3 }
+                  ] -- TODO: change all the previous `n_choice` tests, so even when choice passed, it should store failed tries so that they match by index (or else we don't know which instance of rule has passed), or may be store this info in the match
+            , l_char (Expected ']') { at : 4 }
+            ]
       it "plain text grammar works" $
         withgrm "foobar"
           """main :- repSep(., "")."""
-          "( 0 <main> repsep 0-6 | ( 0 rep any 0-1 ) : ( 0 sep text 1-1 ) : ( 0 rep any 1-2 ) : ( 0 sep text 2-2 ) : ( 0 rep any 2-3 ) : ( 0 sep text 3-3 ) : ( 0 rep any 3-4 ) : ( 0 sep text 4-4 ) : ( 0 rep any 4-5 ) : ( 0 sep text 5-5 ) : ( 0 rep any 5-6 ) : < Expected '', but found end-of-input :: sep text @6 > )"
+          $ AST $
+            n_rep_sep { start : 0, end : 6 }
+              [ l_char_any { at : 0 }
+              , l_text (Expected "") { start : 1, end : 1 }
+              , l_char_any { at : 1 }
+              , l_text (Expected "") { start : 2, end : 2 }
+              , l_char_any { at : 2 }
+              , l_text (Expected "") { start : 3, end : 3 }
+              , l_char_any { at : 3 }
+              , l_text (Expected "") { start : 4, end : 4 }
+              , l_char_any { at : 4 }
+              , l_text (Expected "") { start : 5, end : 5 }
+              , l_char_any { at : 5 }
+              , l_text_err (Expected "") EOI { pos : 6 }
+              ]
       it "parsing newlines (as chars)" $
         withgrm "\n"
           """main :- '\n'."""
-          "( 0 <main> char 0-1 )"
+          $ AST $ l_char (Expected '\n') { at : 0 }
       it "parsing newlines (as strings)" $
         withgrm "\n"
           """main :- "\n"."""
-          "( 0 <main> text 0-1 )"
+          $ AST $ l_text (Expected "\n") { start : 0, end : 1 }
       it "parsing char ranges" $
         withgrm "234"
           "main :- [digit,digit,digit].\ndigit :- [0-9]."
-          "( 0 <main> seqnc 0-3 | ( 0 rule:digit char-range 0-1 ) : ( 0 rule:digit char-range 1-2 ) : ( 0 rule:digit char-range 2-3 ) )"
+          $ AST $ n_seq { start : 0, end : 3 }
+            [ n_ref "digit" { start : 0, end : 1 } $ l_char_rng { from : '0', to : '9' } { at : 0 }
+            , n_ref "digit" { start : 1, end : 2 } $ l_char_rng { from : '0', to : '9' } { at : 1 }
+            , n_ref "digit" { start : 2, end : 3 } $ l_char_rng { from : '0', to : '9' } { at : 2 }
+            ]
       it "num is not parsed as alpha" $
         withgrm "2"
           "main :- [a-z]."
-          "< Expected character in range from 'a' to 'z', but found '2' :: <main> char-range @0 >"
+          $ AST $ l_char_rng_err { from : 'a', to : 'z' } (Found '2') { pos : 0 }
       it "parsing char ranges in sequences" $
         withgrm "2"
           "main :- [[0-9]]."
-          "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) )"
+          $ AST $ n_seq { start : 0, end : 1 } [ l_char_rng { from : '0', to : '9' } { at : 0 } ]
       it "parsing char ranges in sequences 2" $
         withgrm "2"
           """main :- [[0-9],repSep(" ","")]."""
-          "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | < Expected ' ', but found end-of-input :: rep text @1 > ) )"
-      it "parsing empty rep/seps" $
+          $ AST $ n_seq { start : 0, end : 1 }
+              [ l_char_rng { from : '0', to : '9' } { at : 0 }
+              , n_rep_sep { start : 1, end : 1 }
+                  [ l_text_err (Expected " ") EOI { pos : 1 }
+                  ]
+              ]
+      it "parsing empty rep/seps with char-ranges" $
         withgrm "2"
           """main :- [[0-9],repSep([0-9],"")]."""
-          "( 0 <main> seqnc 0-1 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | < Expected character in range from '0' to '9', but found end-of-input :: rep char-range @1 > ) )"
-      it "parsing empty rep/seps 2" $
+          $ AST $ n_seq { start : 0, end : 1 }
+              [ l_char_rng { from : '0', to : '9' } { at : 0 }
+              , n_rep_sep { start : 1, end : 1 }
+                  [ l_char_rng_err { from : '0', to : '9' } EOI { pos : 1 }
+                  ]
+              ]
+      it "parsing empty rep/seps between matches" $
         withgrm "2a"
           """main :- [[0-9],repSep(" ",""),'a']."""
-          "( 0 <main> seqnc 0-2 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | < Expected ' ', but found 'a' :: rep text @1 > ) : ( 0 seq:2 char 1-2 ) )"
-      it "parsing empty rep/seps 3" $
+          $ AST $ n_seq { start : 0, end : 2 }
+              [ l_char_rng { from : '0', to : '9' } { at : 0 }
+              , n_rep_sep { start : 1, end : 1 }
+                  [ l_text_err (Expected " ") (Found "a") { pos : 1 }
+                  ]
+              , l_char (Expected 'a') { at : 1 }
+              ]
+      it "parsing empty rep/seps between matches 2" $
         withgrm "t = 25"
           """main :- [[a-z], repSep([a-z], ""), " = 25"]."""
-          "( 0 <main> seqnc 0-6 | ( 0 seq:0 char-range 0-1 ) : ( 0 seq:1 repsep 1-1 | < Expected character in range from 'a' to 'z', but found ' ' :: rep char-range @1 > ) : ( 0 seq:2 text 1-6 ) )"
-      it "parsing choices" $
+          $ AST $ n_seq { start : 0, end : 6 }
+              [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
+              , n_rep_sep { start : 1, end : 1 }
+                  [ l_char_rng_err { from : 'a', to : 'z' } (Found ' ') { pos : 1 }
+                  ]
+              , l_text (Expected " = 25") { start : 1, end : 6 }
+              ]
+      it "parsing generic choices" $
         withgrm "x"
           "main :- ('y' | 'x')."
-          "( 0 <main> choice 0-1 | ( 0 ch:1 char 0-1 ) )"
-      pending' "parsing choices 2" $ -- so that empty result is considered failure?
+          $ AST $ n_choice { start : 0, end : 1 }
+              [ l_char_err (Expected 'y') (Found 'x') { pos : 0 }
+              , l_char (Expected 'x') { at : 0 }
+              ]
+      it "parsing choices with the first empty option (the first empty option should pass)" $ -- even though the second one seems to fit
         withgrm "x"
           "main :- (\"\" | 'x')."
-          "( 0 <main> choice 0-1 | ( 0 ch:1 char 0-1 ) )"
-      it "parsing choices 3" $
+          $ AST $ n_choice { start : 0, end : 0 }
+            [ l_text (Expected "") { start : 0, end : 0 }
+            ]
+      it "parsing choices with the last empty option (the first fitting option should pass)" $
         withgrm "x"
           "main :- ('x' | \"\")."
-          "( 0 <main> choice 0-1 | ( 0 ch:0 char 0-1 ) )"
-      it "parsing choices 4" $
+          $ AST $ n_choice { start : 0, end : 1 }
+            [ l_char (Expected 'x') { at : 0 }
+            ]
+      it "parsing choices with  the last empty option continued" $
+        withgrm "x"
+          "main :- ('y' | 'x' | \"\")."
+          $ AST $ n_choice { start : 0, end : 1 }
+            [ l_char_err (Expected 'y') (Found 'x') { pos : 0 }
+            , l_char (Expected 'x') { at : 0 }
+            ]
+      it "parsing choices with overlapping sequences" $
         withgrm "x"
           "main :- (['x', '='] | 'x')."
-          "( 0 <main> choice 0-1 | ( 0 ch:0 seqnc 0-1 | ( 0 seq:0 char 0-1 ) : < Expected '=', but found end-of-input :: seq:1 char @1 > ) )"
-      it "parsing choices 5" $
+          $ AST $ n_choice { start : 0, end : 1 }
+            [ n_seq_err { entry : 1, pos : 1 }
+              [ l_char (Expected 'x') { at : 0 }
+              , l_char_err (Expected '=') EOI { pos : 1 }
+              ]
+            , l_char (Expected 'x') { at : 0 }
+            ]
+      it "parsing choices with empty option on empty input" $
         withgrm ""
           "main :- ('x' | \"\")."
-          "( 0 <main> choice 0-0 | ( 0 ch:1 text 0-0 ) )"
-      it "parsing choices 6" $
+          $ AST $ n_choice { start : 0, end : 0 }
+            [ l_char_err (Expected 'x') EOI { pos : 0 }
+            , l_text (Expected "") { start : 0, end : 0 }
+            ]
+      it "parsing choices with empty option on a meaningful input" $
         withgrm "x"
           "main :- ([a-z] | \"\")."
-          "( 0 <main> choice 0-1 | ( 0 ch:0 char-range 0-1 ) )"
-      -}
+          $ AST $ n_choice { start : 0, end : 1 }
+            [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
+            ]
 
       {-
       let
@@ -549,6 +642,13 @@ n_ref :: String -> Range -> ASTNode Int -> ASTNode Int
 n_ref ruleName range rulenode =
   Node
     { rule : Ref Nothing ruleName, result : Match range 0 }
+    [ rulenode ]
+
+
+n_ref_capt :: { name :: String, as :: String } -> Range -> ASTNode Int -> ASTNode Int
+n_ref_capt { name, as } range rulenode =
+  Node
+    { rule : Ref (Just as) name, result : Match range 0 }
     [ rulenode ]
 
 

@@ -175,7 +175,7 @@ _choice set f rule options =
 
             remainingOptions /\ Prev _ prevStep -> -- following iteration, we check later if there are any options remaining
                 if not $ _failed prevStep.node then -- matched last option successfully, stop with informing about it
-                    IterStop prevStep.rest [ prevStep.node ]
+                    IterStop prevStep.rest soFar -- [ prevStep.node ] (if we only want to include the successful node)
                         $ Match { start : start.position, end : _.position prevStep.rest }
                         $ f rule
                 else -- still not matched, try further while there are options

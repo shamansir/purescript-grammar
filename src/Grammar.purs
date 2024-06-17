@@ -239,7 +239,7 @@ instance Show a => Show (AST a) where
         ruleType = case _ of
             Sequence _ -> "seqnc"
             Choice _ -> "choice"
-            Ref _ name -> "ref:" <> name
+            Ref mbCapture name -> "ref:" <> fromMaybe name mbCapture
             Text _ -> "text"
             CharRule r -> case r of
                 Single _ -> "char"
