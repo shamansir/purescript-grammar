@@ -550,7 +550,6 @@ main = launchAff_ $ runSpec [consoleReporter] do
             [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
             ]
 
-      {-
       let
         identifierGrammar =
           """main :- ident.
@@ -558,26 +557,104 @@ main = launchAff_ $ runSpec [consoleReporter] do
              num :- [0-9].
              alphaNum :- (alpha | num).
              ident :- [alpha, repSep((alphaNum | "."), "")]."""
-      -}
 
-      {-
 
       it "parsing identifier rule" $
         withgrm "t"
           identifierGrammar
-          "( 0 rule:ident seqnc 0-1 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-1 | < None of choices matched input :: rep choice @1 > ) )"
-          --"( 0 rule:ident seqnc 0-1 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-1 | ∅ ) )"
-
+          $ AST
+              $ n_ref "ident" { start : 0, end : 1 }
+              $ n_seq { start : 0, end : 1 }
+                  [ n_ref "alpha" { start : 0, end : 1 }
+                      $ n_choice { start : 0, end : 1 }
+                      [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
+                      ]
+                  , n_rep_sep { start : 1, end : 1 }
+                      [ n_choice_err { pos : 1 }
+                          [ n_ref_err "alphaNum" { pos : 1 }
+                              $ n_choice_err { pos : 1 }
+                                  [ n_ref_err "alpha" { pos : 1 }
+                                      $ n_choice_err { pos : 1 }
+                                      [ l_char_rng_err
+                                          { from : 'a', to : 'z' } EOI { pos : 1 }
+                                      , l_char_rng_err
+                                          { from : 'A', to : 'Z' } EOI { pos : 1 }
+                                      , l_text_err
+                                          (Expected "_") EOI { pos : 1 }
+                                      ]
+                                  , n_ref_err "num" { pos : 1 }
+                                      $ l_char_rng_err
+                                          { from : '0', to : '9' } EOI { pos : 1 }
+                                  ]
+                          , l_text_err (Expected ".") EOI { pos : 1 }
+                          ]
+                      ]
+                  ]
       it "parsing identifier rule 2" $
-        withgrm "0"
+        withgrm "2"
           identifierGrammar
-          "( 0 rule:ident seqnc 0-2 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-2 | ( 0 rep choice 1-2 | ( 0 rule:alphaNum choice 1-2 | ( 0 rule:num char-range 1-2 ) ) ) ) )"
+          $ AST
+              $ n_ref_err "ident" { pos : 0 }
+              $ n_seq_err { pos : 0, entry : 0 }
+                  [ n_ref_err "alpha" { pos : 0 }
+                      $ n_choice_err { pos : 0 }
+                      [ l_char_rng_err { from : 'a', to : 'z' } (Found '2') { pos : 0 }
+                      , l_char_rng_err
+                          { from : 'A', to : 'Z' } (Found '2') { pos : 0 }
+                      , l_text_err
+                          (Expected "_") (Found "2") { pos : 0 }
+                      ]
+                  ]
 
       it "parsing identifier rule 3" $
         withgrm "t0 "
           identifierGrammar
-          "( 0 rule:ident seqnc 0-2 | ( 0 rule:alpha choice 0-1 | ( 0 ch:0 char-range 0-1 ) ) : ( 0 seq:1 repsep 1-2 | ( 0 rep choice 1-2 | ( 0 rule:alphaNum choice 1-2 | ( 0 rule:num char-range 1-2 ) ) ) ) )"
-      -}
+          $ AST
+              $ n_ref "ident" { start : 0, end : 2 }
+              $ n_seq { start : 0, end : 2 }
+                  [ n_ref "alpha" { start : 0, end : 1 }
+                      $ n_choice { start : 0, end : 1 }
+                      [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
+                      ]
+                  , n_rep_sep { start : 1, end : 2 }
+                      [ n_choice { start : 1, end : 2 }
+                          [ n_ref "alphaNum" { start : 1, end : 2 }
+                              $ n_choice { start : 1, end : 2 }
+                                  [ n_ref_err "alpha" { pos : 1 }
+                                      $ n_choice_err { pos : 1 }
+                                      [ l_char_rng_err
+                                          { from : 'a', to : 'z' } (Found '0') { pos : 1 }
+                                      , l_char_rng_err
+                                          { from : 'A', to : 'Z' } (Found '0') { pos : 1 }
+                                      , l_text_err
+                                          (Expected "_") (Found "0") { pos : 1 }
+                                      ]
+                                  , n_ref "num" { start : 1, end : 2 }
+                                      $ l_char_rng
+                                          { from : '0', to : '9' } { at : 1 }
+                                  ]
+                          ]
+                      , l_text (Expected "") { start : 2, end : 2 }
+                      , n_choice_err { pos : 2 }
+                          [ n_ref_err "alphaNum" { pos : 2 }
+                              $ n_choice_err { pos : 2 }
+                                  [ n_ref_err "alpha" { pos : 2 }
+                                      $ n_choice_err { pos : 2 }
+                                      [ l_char_rng_err
+                                          { from : 'a', to : 'z' } (Found ' ') { pos : 2 }
+                                      , l_char_rng_err
+                                          { from : 'A', to : 'Z' } (Found ' ') { pos : 2 }
+                                      , l_text_err
+                                          (Expected "_") (Found " ") { pos : 2 }
+                                      ]
+                                  , n_ref_err "num" { pos : 2 }
+                                      $ l_char_rng_err
+                                          { from : '0', to : '9' } (Found ' ') { pos : 2 }
+                                  ]
+                          , l_text_err (Expected ".") (Found " ") { pos : 2 }
+                          ]
+                      ]
+                  ]
 
 {-
       it "parses `blocks`" $

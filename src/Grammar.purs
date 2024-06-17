@@ -235,7 +235,7 @@ instance Show a => Show (AST a) where
                         Match range a ->
                             "( " <> show a <> " " <> smatch { at, range, rule } <> " | " <> String.joinWith " : " (mapWithIndex (showTree <<< flip locate rule) children) <> " )"
                         Fail position error ->
-                            "< " <> sfailure { error, at, rule, position } <> " | " <> String.joinWith " : " (mapWithIndex (showTree <<< flip locate rule) children) <> " )"
+                            "< " <> sfailure { error, at, rule, position } <> " | " <> String.joinWith " : " (mapWithIndex (showTree <<< flip locate rule) children) <> " >"
         ruleType = case _ of
             Sequence _ -> "seqnc"
             Choice _ -> "choice"
