@@ -41,7 +41,6 @@ main = launchAff_ $ runSpec [consoleReporter] do
       withgrmfile = parsesWithGrammarFromFile
       mkerr = mkParseError
       mkserr = mkSParseError
-    {-
     describe "parsing grammars (inline)" $ do
       it "should parse simple grammar (string)" $
         grm "main :- \"foobar\".\n" "main :- \"foobar\".\n"
@@ -137,8 +136,6 @@ main = launchAff_ $ runSpec [consoleReporter] do
         grmfile "json"
       pending' "parses `test`" $
         grmfile "test"
-    -}
-
 
     describe "parsing with grammars" $ do
 
@@ -258,9 +255,9 @@ main = launchAff_ $ runSpec [consoleReporter] do
           """
           $ AST $ n_seq { start : 0, end : 3 }
             [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
-            , n_ref "nothing" { start : 1, end : 1 } $ l_text (Expected "" ) { start : 1, end : 1 }
+            , n_ref "nothing" { start : 1, end : 1 } $ l_text (Expected "") { start : 1, end : 1 }
             , n_ref "o" { start : 1, end : 2 } $ l_char (Expected 'o') { at : 1 }
-            , n_ref "nothing" { start : 2, end : 2 } $ l_text (Expected "" ) { start : 2, end : 2 }
+            , n_ref "nothing" { start : 2, end : 2 } $ l_text (Expected "") { start : 2, end : 2 }
             , n_ref "o" { start : 2, end : 3 } $ l_char (Expected 'o') { at : 2 }
             ]
       it "parsing sequences with empty items fails" $
@@ -272,7 +269,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
           """
           $ AST $ n_seq_err { pos : 1, entry : 2 }
             [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
-            , n_ref "nothing" { start : 1, end : 1 } $ l_text (Expected "" ) { start : 1, end : 1 }
+            , n_ref "nothing" { start : 1, end : 1 } $ l_text (Expected "") { start : 1, end : 1 }
             , n_ref_err "o" { pos : 1 } $ l_char_err (Expected 'o') (Found 'x') { pos : 1 }
             ]
       it "parsing char choice" $
@@ -349,7 +346,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
               , n_ref "fo" { start : 1, end : 2 } $ n_choice { start : 1, end : 2 } [ l_char_err (Expected 'f') (Found 'o') { pos : 1 }, l_char (Expected 'f') { at : 1 } ]
               , l_text (Expected "") { start : 2, end : 2 }
               , n_ref "fo" { start : 2, end : 3 } $ n_choice { start : 2, end : 3 } [ l_char_err (Expected 'f') (Found 'o') { pos : 2 }, l_char (Expected 'o') { at : 2 } ]
-              , l_text_err (Expected "") EOI { pos : 3 }
+              , l_text_eoi_err { pos : 3 }
               ]
       it "parsing rep/sep when input is empty (should pass)" $
         withgrm ""
@@ -369,7 +366,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm ""
           """main :- repSep("","")."""
           $ AST $ n_rep_sep { start : 0, end : 0 }
-            [ l_text_err (Expected "") EOI { pos : 0 }
+            [ l_text_eoi_err { pos : 0 }
             ]
       it "parsing rep/sep when input is empty, but both rep & sep are non-empty (should pass)" $
         withgrm ""
@@ -394,14 +391,14 @@ main = launchAff_ $ runSpec [consoleReporter] do
           """main :- repSep("2","")."""
           $ AST $ n_rep_sep { start : 0, end : 1 }
             [ l_text (Expected "2") { start : 0, end : 1 }
-            , l_text_err (Expected "") EOI { pos : 1 }
+            , l_text_eoi_err { pos : 1 }
             ]
       it "parsing rep/sep with single element as char sequence (should pass)" $
         withgrm "2"
           """main :- repSep([0-9],"")."""
           $ AST $ n_rep_sep { start : 0, end : 1 }
             [ l_char_rng { from : '0', to : '9' } { at : 0 }
-            , l_text_err (Expected "") EOI { pos : 1 }
+            , l_text_eoi_err { pos : 1 }
             ]
       it "capture works" $
         withgrm "[a-z]"
@@ -438,7 +435,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
               , l_char_any { at : 4 }
               , l_text (Expected "") { start : 5, end : 5 }
               , l_char_any { at : 5 }
-              , l_text_err (Expected "") EOI { pos : 6 }
+              , l_text_eoi_err { pos : 6 }
               ]
       it "parsing newlines (as chars)" $
         withgrm "\n"
@@ -716,6 +713,12 @@ l_char_any_err found { pos } = Leaf { rule : CharRule Any, result : Fail pos $ A
 l_text_err :: Expected String -> Found String -> { pos :: Int } -> ASTNode Int
 l_text_err (Expected text) found { pos } =
   Leaf { rule : Text text, result : Fail pos $ TextError { expected : Expected text, found : found }  }
+
+
+l_text_eoi_err :: { pos :: Int } -> ASTNode Int
+l_text_eoi_err { pos } =
+  -- l_text_err (Expected "") EOI { pos }
+  Leaf { rule : Text "", result : Fail pos EndOfInput  }
 
 
 n_ref :: String -> Range -> ASTNode Int -> ASTNode Int

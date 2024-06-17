@@ -96,6 +96,7 @@ data Error
     | ChoiceError {} -- { errors :: Array Error }
     | PlaceholderError
     | EndOfInput
+    | ReachedAttemptsLimit
     | Unknown
 
 
@@ -282,8 +283,9 @@ instance Show Error where
         SequenceError { index } -> "Sequence failed at entry " <> show index
         -- RepeatError err -> "rep TODO"
         -- SeparatorError err -> "sep TODO"
-        RepSepHangingOperatorError _ -> "repsep TODO"
-        EndOfInput -> "end of input"
+        RepSepHangingOperatorError _ -> "Rep/Sep has hanging operator"
+        EndOfInput -> "End of input"
+        ReachedAttemptsLimit -> "Reached the limit of attempts"
         PlaceholderError -> "PLC"
         Unknown -> "UNK"
 

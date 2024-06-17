@@ -84,6 +84,16 @@ _unexpectedStep' value state =
     { value, rest : state, node : Leaf { rule : None, result : Fail 0 EndOfInput } }
 
 
+_reachedAttemptsLimit :: forall a.  State -> Step a Unit
+_reachedAttemptsLimit =
+    _reachedAttemptsLimit' unit
+
+
+_reachedAttemptsLimit' :: forall a x. x -> State -> Step a x
+_reachedAttemptsLimit' value state =
+    { value, rest : state, node : Leaf { rule : None, result : Fail state.position ReachedAttemptsLimit } }
+
+
 data IfProceed
     = Proceed
     | Stop Error
@@ -97,8 +107,8 @@ _text f rule expected =
                 then Proceed
                 else Stop $ TextError { expected : G.expected expected, found : G.found found }
         EOI ->
-            {- if (String.length expected == 0) then Proceed
-            else -} Stop $ TextError { expected : G.expected expected, found : G.eoi }
+            if (String.length expected == 0) then Proceed
+            else Stop $ TextError { expected : G.expected expected, found : G.eoi }
 
 
 _char :: forall a. (Rule -> a) -> Rule -> CharX -> P a
@@ -262,6 +272,21 @@ type Iteration rem a =
     }
 
 
+data AttemptsLimit
+    = InfiniteAttempts
+    | LimitedAttempts Int
+
+
+_attemptsLimit :: AttemptsLimit
+_attemptsLimit = LimitedAttempts 10000
+
+
+_mayContinue :: AttemptsLimit -> Int -> Boolean
+_mayContinue limit n = case limit of
+    InfiniteAttempts -> true
+    LimitedAttempts cmp -> n <= cmp
+
+
 _niter :: forall rem a. RuleSet -> (Rule -> a) -> Rule -> rem -> (Iteration rem a -> IterStep rem a) -> P a
 _niter set f rule remaining check =
     Parser \state ->
@@ -275,14 +300,16 @@ _niter set f rule remaining check =
             , node : Node { rule, result } children
             }
         iterStep start resultsSoFar index (IterNext remaining nextRule at state) =
-            let
-                ruleParser = parseRule set f at nextRule
-                lastStep = step ruleParser state
-                soFar = Array.snoc resultsSoFar lastStep.node
-                nextIndex = index + 1 -- TODO: limit the number of attempts to prevent stack overflow
-            in
-                iterStep start soFar nextIndex $ check { index : nextIndex, remaining, soFar, start, prev : Prev index lastStep, irule : nextRule }
-
+            if _mayContinue _attemptsLimit index then
+                let
+                    ruleParser = parseRule set f at nextRule
+                    lastStep = step ruleParser state
+                    soFar = Array.snoc resultsSoFar lastStep.node
+                    nextIndex = index + 1 -- TODO: limit the number of attempts to prevent stack overflow
+                in
+                    iterStep start soFar nextIndex $ check { index : nextIndex, remaining, soFar, start, prev : Prev index lastStep, irule : nextRule }
+            else
+                _reachedAttemptsLimit state
 
 
 _ltryChar :: forall a. (Rule -> a) -> Rule -> (Found Char -> IfProceed) -> P a
@@ -310,6 +337,7 @@ _ltry f rule advance tryWith = Parser \{ position, next } ->
                     _lfail next position error
         else
             case tryWith EOI of
+                -- Proceed -> _lmatch after position position
                 Proceed -> _lfail next position EndOfInput
                 Stop error -> _lfail next position error
 
