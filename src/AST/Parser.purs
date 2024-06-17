@@ -97,7 +97,8 @@ _text f rule expected =
                 then Proceed
                 else Stop $ TextError { expected : G.expected expected, found : G.found found }
         EOI ->
-            Stop $ TextError { expected : G.expected expected, found : G.eoi }
+            {- if (String.length expected == 0) then Proceed
+            else -} Stop $ TextError { expected : G.expected expected, found : G.eoi }
 
 
 _char :: forall a. (Rule -> a) -> Rule -> CharX -> P a
