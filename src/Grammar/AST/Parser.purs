@@ -33,7 +33,7 @@ type PX a x = Parser a x
 
 
 parse :: forall a. Grammar -> (Rule -> a) -> String -> AST a
-parse grammar f = runParser $ parseRule (G.set grammar) f Main $ G.main grammar
+parse grammar f = runParser $ parseRule (G.set grammar) f $ G.main grammar
 
 
 runParser :: forall a. P a -> String -> AST a
@@ -50,60 +50,32 @@ step :: forall a. P a -> State -> Step a Unit
 step (Parser p) = p
 
 
-parseRule :: forall a. RuleSet -> (Rule -> a) -> At -> Rule -> P a
-parseRule set f at rule = -- FIXME?: `at` is never used
+parseRule :: forall a. RuleSet -> (Rule -> a) -> Rule -> P a
+parseRule set f rule =
     case rule of
-        Text expected -> _text f rule expected
-        CharRule (Single charX) -> _char f rule charX
-        CharRule (Not charX) -> _negChar f rule charX
-        CharRule (Range from to) -> _charRange f rule from to
-        CharRule Any -> _anyChar f rule
-        Sequence sequence -> _sequence set f rule sequence
-        Choice options -> _choice set f rule options
-        Ref mbCapture ruleName -> _ref set f rule mbCapture ruleName
-        RepSep rep sep -> _repSep set f rule { rep, sep }
-        Placeholder -> _text f rule "???"
+        Text expected -> _tryLeaf f rule $ _text expected
+        CharRule (Single charX) -> _tryLeaf f rule $ _char charX
+        CharRule (Not charX) -> _tryLeaf f rule $ _negChar charX
+        CharRule (Range from to) -> _tryLeaf f rule $ _charRange { from, to }
+        CharRule Any -> _tryLeaf f rule $ _anyChar
+        Sequence sequence -> _tryNode set f rule $ _sequence sequence
+        Choice options -> _tryNode set f rule $ _choice options
+        Ref mbCapture ruleName -> _tryNode set f rule $ _ref mbCapture ruleName
+        RepSep rep sep -> _tryNode set f rule $ _repSep { rep, sep }
+        Placeholder -> _tryLeaf f rule $ _text "???"
         None -> _unexpectedFail
 
 
-_unexpectedFail :: forall a. P a
-_unexpectedFail =
-    _unexpectedFail' unit
+type LeafParser x = { advance :: Int, tryWith :: Found x -> IfProceed }
 
 
-_unexpectedFail' :: forall a x. x -> PX a x
-_unexpectedFail' value =
-    Parser $ _unexpectedStep' value
+type NodeParser rem a = { startWith :: rem, step :: Iteration rem a → IterStep rem a }
 
 
-_unexpectedStep :: forall a. State -> Step a Unit
-_unexpectedStep =
-    _unexpectedStep' unit
-
-
-_unexpectedStep' :: forall a x. x -> State -> Step a x
-_unexpectedStep' value state =
-    { value, rest : state, node : Leaf { rule : None, result : Fail 0 EndOfInput } }
-
-
-_reachedAttemptsLimit :: forall a.  State -> Step a Unit
-_reachedAttemptsLimit =
-    _reachedAttemptsLimit' unit
-
-
-_reachedAttemptsLimit' :: forall a x. x -> State -> Step a x
-_reachedAttemptsLimit' value state =
-    { value, rest : state, node : Leaf { rule : None, result : Fail state.position ReachedAttemptsLimit } }
-
-
-data IfProceed
-    = Proceed
-    | Stop Error
-
-
-_text :: forall a. (Rule -> a) -> Rule -> String -> P a
-_text f rule expected =
-    _ltry f rule (String.length expected) $ case _ of
+_text :: String -> LeafParser String
+_text expected =
+    { advance : String.length expected
+    , tryWith : case _ of
         Found found ->
             if (found == expected)
                 then Proceed
@@ -111,31 +83,31 @@ _text f rule expected =
         EOI ->
             if (String.length expected == 0) then Proceed
             else Stop $ TextError { expected : G.expected expected, found : G.eoi }
+    }
 
 
-_char :: forall a. (Rule -> a) -> Rule -> CharX -> P a
-_char f rule expected =
-    _ltryChar f rule $ case _ of
-        Found char ->
-            if char == G.toChar expected
-                then Proceed
-            else Stop $ CharacterError { expected : G.expected expected, found : G.found char }
-        EOI ->
-            Stop $ CharacterError { expected : G.expected expected, found : G.eoi }
+_char :: CharX -> LeafParser String
+_char expected = _ch_convert $ case _ of
+    Found char ->
+        if char == G.toChar expected
+            then Proceed
+        else Stop $ CharacterError { expected : G.expected expected, found : G.found char }
+    EOI ->
+        Stop $ CharacterError { expected : G.expected expected, found : G.eoi }
 
 
-_anyChar :: forall a. (Rule -> a) -> Rule -> P a
-_anyChar f rule =
-    _ltryChar f rule $ case _ of
+_anyChar :: LeafParser String
+_anyChar =
+    _ch_convert $ case _ of
         Found _ ->
             Proceed
         EOI ->
             Stop $ AnyCharacterError { found : G.eoi }
 
 
-_negChar :: forall a. (Rule -> a) -> Rule -> CharX -> P a
-_negChar f rule notExpected =
-    _ltryChar f rule $ case _ of
+_negChar :: CharX -> LeafParser String
+_negChar notExpected =
+    _ch_convert $ case _ of
         Found char ->
             if char == G.toChar notExpected
                 then Stop $ NegCharacterError { notExpected : G.expected notExpected, found : G.found char }
@@ -144,9 +116,9 @@ _negChar f rule notExpected =
             Stop $ NegCharacterError { notExpected : G.expected notExpected, found : G.eoi }
 
 
-_charRange :: forall a. (Rule -> a) -> Rule -> Char -> Char -> P a
-_charRange f rule from to =
-    _ltryChar f rule $ case _ of
+_charRange :: { from :: Char, to :: Char } -> LeafParser String
+_charRange { from, to } =
+    _ch_convert $ case _ of
         Found char ->
             if (char >= from) && (char <= to)
                 then Proceed
@@ -155,12 +127,13 @@ _charRange f rule from to =
             Stop $ CharacterRangeError { from : G.expected from, to : G.expected to, found : G.eoi }
 
 
-_sequence :: forall a. RuleSet -> (Rule -> a) -> Rule -> Array Rule -> P a
-_sequence set f rule seq =
-    _niter set f rule seq $ \{ index, remaining, prev, soFar, start, irule } ->
+_sequence :: forall a. Array Rule -> NodeParser (Array Rule) a
+_sequence seq =
+    { startWith : seq
+    , step : \{ ctx, index, remaining, prev, soFar, irule } ->
         case Array.uncons remaining /\ prev of
             Just { head, tail } /\ Start -> -- first iteration, remaining sequence is not empty
-                IterNext tail head (InSequence index) start
+                IterNext tail head (InSequence index) ctx.start
 
             Just { head, tail } /\ Prev pidx prevStep ->
                 if not $ _failed prevStep.node then -- continue while matching, advance the state
@@ -171,50 +144,55 @@ _sequence set f rule seq =
 
             Nothing /\ Prev pidx prevStep ->
                 IterStop prevStep.rest soFar $ if not $ _failed prevStep.node then -- the last item matched, all is good
-                    Match { start : start.position, end : _.position prevStep.rest } $ f irule
+                    Match { start : ctx.start.position, end : _.position prevStep.rest } $ ctx.f irule
                 else -- the sequence is finished, but the last rule failed to match, fail
                     Fail (_.position prevStep.rest) $ SequenceError { index : pidx }
 
             Nothing /\ Start -> -- when there are no rules specfieid in a sequence, it always matches as empty
-                IterStop start soFar $ Match { start : start.position, end : start.position } $ f irule
+                IterStop ctx.start soFar $ Match { start : ctx.start.position, end : ctx.start.position } $ ctx.f irule
+    }
 
 
-_choice :: forall a. RuleSet -> (Rule -> a) -> Rule -> Array Rule -> P a
-_choice set f rule options =
-    _niter set f rule options $ \{ index, remaining, prev, soFar, start, irule } ->
+_choice :: forall a. Array Rule -> NodeParser (Array Rule) a
+_choice options =
+    { startWith : options
+    , step : \{ ctx, index, remaining, prev, soFar, irule } ->
         case Array.uncons remaining /\ prev of
             Just { head, tail } /\ Start -> -- first iteration, remaining options are not empty
-                IterNext tail head (ChoiceOf index) start
+                IterNext tail head (ChoiceOf index) ctx.start
 
             remainingOptions /\ Prev _ prevStep -> -- following iteration, we check later if there are any options remaining
                 if not $ _failed prevStep.node then -- matched last option successfully, stop with informing about it
                     IterStop prevStep.rest soFar -- [ prevStep.node ] (if we only want to include the successful node)
-                        $ Match { start : start.position, end : _.position prevStep.rest }
-                        $ f rule
+                        $ Match { start : ctx.start.position, end : _.position prevStep.rest }
+                        $ ctx.f irule
                 else -- still not matched, try further while there are options
                     case remainingOptions of
                         Just { head, tail } -> -- remaining options are not yet empty
-                            IterNext tail head (ChoiceOf index) start -- try further, return to the intitial state on the next iteration
+                            IterNext tail head (ChoiceOf index) ctx.start -- try further, return to the intitial state on the next iteration
                         Nothing -> -- out of options, but didn't match previously
-                            IterStop start soFar $ Fail start.position $ ChoiceError { }
+                            IterStop ctx.start soFar $ Fail ctx.start.position $ ChoiceError { }
 
             Nothing /\ Start -> -- when there are no options specfieid in a choice, it always matches as empty
-                IterStop start soFar $ Match { start : start.position, end : start.position } $ f rule
+                IterStop ctx.start soFar $ Match { start : ctx.start.position, end : ctx.start.position } $ ctx.f ctx.rule
+    }
+
 
 data RepOrSep
     = Rep
     | Sep
 
 
-_repSep :: forall a. RuleSet -> (Rule -> a) -> Rule -> { rep :: Rule, sep :: Rule } -> P a
-_repSep set f rule { rep, sep } =
-    _niter set f rule Rep $ \{ remaining, prev, soFar, start, irule } ->
+_repSep :: forall a. { rep :: Rule, sep :: Rule } -> NodeParser RepOrSep a
+_repSep { rep, sep } =
+    { startWith : Rep
+    , step : \{ ctx, remaining, prev, soFar, irule } ->
         case remaining /\ prev of
             Rep /\ Start ->
-                IterNext Sep rep RepOf start
+                IterNext Sep rep RepOf ctx.start
 
             Sep /\ Start ->
-                IterFail start -- should be impossible!
+                IterFail ctx.start -- should be impossible!
 
             repOrSep /\ Prev _ prevStep ->
                 if not $ _failed prevStep.node then
@@ -222,22 +200,25 @@ _repSep set f rule { rep, sep } =
                         Rep -> IterNext Sep rep RepOf prevStep.rest
                         Sep -> IterNext Rep sep SepOf prevStep.rest
                 else
-                    IterStop prevStep.rest soFar $ Match { start : start.position, end : _.position prevStep.rest } $ f irule
+                    IterStop prevStep.rest soFar $ Match { start : ctx.start.position, end : _.position prevStep.rest } $ ctx.f irule
+    }
 
 
-_ref :: forall a. RuleSet -> (Rule -> a) -> Rule -> Maybe CaptureName -> RuleName -> P a
-_ref set f rule mbCapture ruleName =
-    Parser \state ->
+_ref :: forall a. Maybe CaptureName -> RuleName -> NodeParser Unit a
+_ref mbCapture ruleName =
+    { startWith : unit
+    , step : \{ ctx } ->
         let
-            mbRule = set # Map.lookup ruleName
+            state = ctx.start
+            mbRule = ctx.set # Map.lookup ruleName
             mbRuleStep =
-                flip step state <$> parseRule set f (At ruleName) <$> mbRule
+                flip step state <$> parseRule ctx.set ctx.f <$> mbRule
             rest = maybe state _.rest mbRuleStep
             result =
                 case mbRuleStep of
                     Just ruleStep ->
                         if (not $ _failed ruleStep.node) then
-                            Match { start : state.position, end : _.position $ ruleStep.rest } $ f rule
+                            Match { start : state.position, end : _.position $ ruleStep.rest } $ ctx.f ctx.rule
                         else
                             Fail state.position $ RuleApplicationFailed { name : ruleName, capture : mbCapture }
                     Nothing -> Fail state.position
@@ -247,10 +228,14 @@ _ref set f rule mbCapture ruleName =
                                     $ mbRule
             children = maybe [] (Array.singleton <<< _.node) mbRuleStep
         in
-            { value : unit
-            , rest : rest
-            , node : Node { rule, result } children
-            }
+            IterStop rest children result
+
+    }
+
+
+data IfProceed
+    = Proceed
+    | Stop Error
 
 
 data IterStep rem a
@@ -264,13 +249,21 @@ data IterPrev a
     | Prev Int (Step a Unit)
 
 
+type IterContext a =
+    { start :: State
+    , rule :: Rule
+    , f :: Rule -> a
+    , set :: RuleSet
+    }
+
+
 type Iteration rem a =
     { index :: Int
     , remaining :: rem
     , soFar :: Array (ASTNode a)
-    , start :: State
     , irule :: Rule
     , prev :: IterPrev a
+    , ctx :: IterContext a
     }
 
 
@@ -289,56 +282,19 @@ _mayContinue limit n = case limit of
     LimitedAttempts cmp -> n <= cmp
 
 
-_niter :: forall rem a. RuleSet -> (Rule -> a) -> Rule -> rem -> (Iteration rem a -> IterStep rem a) -> P a
-_niter set f rule remaining check =
-    Parser \state ->
-        iterStep state [] 0 $ check { index : 0, remaining, soFar : [], start : state, prev : Start, irule : None }
-    where
-        iterStep :: State -> Array (ASTNode a) -> Int -> IterStep rem a -> Step _ Unit
-        iterStep _ _ _ (IterFail state) = _unexpectedStep state
-        iterStep _ _ _ (IterStop state children result) =
-            { value : unit
-            , rest : state
-            , node : Node { rule, result } children
-            }
-        iterStep start resultsSoFar index (IterNext remaining nextRule at state) =
-            if _mayContinue _attemptsLimit index then
-                let
-                    ruleParser = parseRule set f at nextRule
-                    lastStep = step ruleParser state
-                    soFar = Array.snoc resultsSoFar lastStep.node
-                    nextIndex = index + 1 -- TODO: limit the number of attempts to prevent stack overflow
-                in
-                    iterStep start soFar nextIndex $ check { index : nextIndex, remaining, soFar, start, prev : Prev index lastStep, irule : nextRule }
-            else
-                _reachedAttemptsLimit state
-
-
-_ltryChar :: forall a. (Rule -> a) -> Rule -> (Found Char -> IfProceed) -> P a
-_ltryChar f rule tryWith = _ltry f rule 1 $ case _ of
-    Found found ->
-        case SCU.charAt 0 found of
-            Just char ->
-                tryWith $ Found char
-            Nothing ->
-                tryWith EOI
-    EOI ->
-        tryWith EOI
-
-
-_ltry :: forall a. (Rule -> a) -> Rule -> Int -> (Found String -> IfProceed) -> P a
-_ltry f rule advance tryWith = Parser \{ position, next } ->
+_tryLeaf :: forall a. (Rule -> a) -> Rule -> LeafParser String -> P a
+_tryLeaf f rule lp = Parser \{ position, next } ->
     let
-        { before, after } = SCU.splitAt advance next
+        { before, after } = SCU.splitAt lp.advance next
     in
         if String.length next > 0 then
-            case tryWith $ Found before of
+            case lp.tryWith $ Found before of
                 Proceed ->
-                    _lmatch after position $ position + advance
+                    _lmatch after position $ position + lp.advance
                 Stop error ->
                     _lfail next position error
         else
-            case tryWith EOI of
+            case lp.tryWith EOI of
                 -- Proceed -> _lmatch after position position
                 Proceed -> _lfail next position EndOfInput
                 Stop error -> _lfail next position error
@@ -366,6 +322,56 @@ _ltry f rule advance tryWith = Parser \{ position, next } ->
                     , result : Fail position error
                     }
             }
+
+
+_tryNode :: forall rem a. RuleSet -> (Rule -> a) -> Rule -> NodeParser rem a -> P a
+_tryNode set f rule np =
+    Parser \state ->
+        iterStep state [] 0 $ np.step $ first state
+    where
+        iterStep :: State -> Array (ASTNode a) -> Int -> IterStep rem a -> Step _ Unit
+        iterStep _ _ _ (IterFail state) = _unexpectedStep state
+        iterStep _ _ _ (IterStop state children result) =
+            { value : unit
+            , rest : state
+            , node : Node { rule, result } children
+            }
+        iterStep start resultsSoFar index (IterNext remaining nextRule at state) =
+            if _mayContinue _attemptsLimit index then
+                let
+                    ctx = mkctx start
+                    ruleParser = parseRule set f nextRule
+                    lastStep = step ruleParser state
+                    soFar = Array.snoc resultsSoFar lastStep.node
+                    nextIndex = index + 1 -- TODO: limit the number of attempts to prevent stack overflow
+                in
+                    iterStep start soFar nextIndex $ np.step $ next ctx nextIndex soFar remaining nextRule $ Prev index lastStep
+            else
+                _reachedAttemptsLimit state
+
+        mkctx start = { start, rule, f, set }
+
+        first :: State -> Iteration rem a
+        first start = { index : 0, remaining : np.startWith, soFar : [], prev : Start, irule : None, ctx : mkctx start }
+
+        next :: IterContext a -> Int -> Array (ASTNode a) -> rem -> Rule -> IterPrev a -> Iteration rem a
+        next ctx nextIndex soFar remaining nextRule prev = { index : nextIndex, remaining, soFar, prev, irule : nextRule, ctx }
+
+
+_ch_convert :: (Found Char -> IfProceed) -> LeafParser String
+_ch_convert tryWith =
+    { advance : 1
+    , tryWith : case _ of
+        Found found ->
+            case SCU.charAt 0 found of
+                Just char ->
+                    tryWith $ Found char
+                Nothing ->
+                    tryWith EOI
+        EOI ->
+            tryWith EOI
+    }
+
 
 
 -- text :: forall a. a -> String -> P a
@@ -397,24 +403,31 @@ _failedAttempt (Match _ _) = false
 _failedAttempt (Fail _ _) = true
 
 
-{-
-_makeError :: String -> Rule -> Error
-_makeError substr =
-    case _ of
-        Text expected -> TextError { expected : G.expected expected, found : qfoundstr expected }
-        CharRule (Single chx) -> CharacterError { expected : G.expected chx, found : qfoundchar substr }
-        CharRule (Not chx) -> NegCharacterError { notExpected : G.expected chx, found : qfoundchar substr }
-        CharRule (Range from to) -> CharacterRangeError { from : G.expected from, to : G.expected to, found : qfoundchar substr }
-        CharRule Any -> AnyCharacterError { found : qfoundchar substr }
-        Choice _ -> ChoiceError { }
-        Sequence _ -> SequenceError { index : 0 }  -- FIXME
-        Ref mbCapture name -> RuleNotFoundError { name, capture : mbCapture }
-        RepSep _ _ -> RepSepHangingOperatorError { occurence : 0 } -- FIXME
-        Placeholder -> PlaceholderError
-        None -> Unknown
-    where
-        qfoundstr expected =
-            if String.length substr > 0 then G.found $ String.take (String.length expected) substr else G.eoi
-        qfoundchar =
-            String.take 1 >>> SCU.charAt 0 >>> maybe G.eoi G.found -- FIXME: EOL/EOF
--}
+_unexpectedFail :: forall a. P a
+_unexpectedFail =
+    _unexpectedFail' unit
+
+
+_unexpectedFail' :: forall a x. x -> PX a x
+_unexpectedFail' value =
+    Parser $ _unexpectedStep' value
+
+
+_unexpectedStep :: forall a. State -> Step a Unit
+_unexpectedStep =
+    _unexpectedStep' unit
+
+
+_unexpectedStep' :: forall a x. x -> State -> Step a x
+_unexpectedStep' value state =
+    { value, rest : state, node : Leaf { rule : None, result : Fail 0 EndOfInput } }
+
+
+_reachedAttemptsLimit :: forall a.  State -> Step a Unit
+_reachedAttemptsLimit =
+    _reachedAttemptsLimit' unit
+
+
+_reachedAttemptsLimit' :: forall a x. x -> State -> Step a x
+_reachedAttemptsLimit' value state =
+    { value, rest : state, node : Leaf { rule : None, result : Fail state.position ReachedAttemptsLimit } }
