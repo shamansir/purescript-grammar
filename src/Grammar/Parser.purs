@@ -2,11 +2,9 @@ module Grammar.Parser where
 
 import Prelude
 
-import Debug as Debug
-
-import Data.Tuple (uncurry, fst) as Tuple
+import Data.Tuple (uncurry) as Tuple
 import Data.Tuple.Nested ((/\), type (/\))
-import Data.String.CodeUnits as String
+import Data.String.CodeUnits (fromCharArray) as String
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Array.NonEmpty as NEA
@@ -14,8 +12,6 @@ import Data.List.NonEmpty as NEL
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Map as Map
 import Control.Lazy (defer)
-import Data.String (joinWith) as String
-import Control.Alt ((<|>))
 
 import Grammar (Grammar, CharX(..), toChar)
 import Grammar as Grammar
@@ -25,8 +21,8 @@ import Parsing (fail) as P
 import Parsing.Combinators ((<?>))
 import Parsing.Combinators as P
 import Parsing.Combinators.Array as PA
-import Parsing.String as P
-import Parsing.String.Basic as P
+import Parsing.String (anyChar, char, string) as P
+import Parsing.String.Basic (alphaNum, skipSpaces, space) as P
 
 
 type P a = Parser String a

@@ -4,7 +4,6 @@ import Prelude
 
 import Effect (Effect)
 import Effect.Class (liftEffect, class MonadEffect)
-import Effect.Class.Console (log)
 import Control.Monad.Error.Class (class MonadThrow)
 import Effect.Exception (Error) as Ex
 
@@ -12,8 +11,7 @@ import Data.Maybe (Maybe(..))
 import Data.Either (Either(..))
 import Data.Bifunctor (lmap)
 
-import Effect (Effect)
-import Effect.Aff (launchAff_, delay)
+import Effect.Aff (launchAff_)
 import Test.Spec (pending, describe, it, describeOnly, itOnly, pending')
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter.Console (consoleReporter)
@@ -22,12 +20,14 @@ import Test.Spec.Runner (runSpec)
 import Node.Encoding (Encoding(..)) as Encoding
 import Node.FS.Sync (readTextFile, writeTextFile)
 
-import Grammar (Grammar, AST(..), ASTNode(..), Tree(..), Rule(..), Attempt(..), Expected(..), Found(..), Error(..), CharRule(..), CharX(..), ruleOf, Range)
+import Grammar (Grammar, Rule(..), CharRule(..), CharX(..))
 import Grammar.Parser (parser) as Grammar
-import AST.Parser (parse) as WithGrammar
+import Grammar.AST.Tree (Tree(..))
+import Grammar.AST (AST(..), ASTNode, Range, Attempt(..), Expected(..), Found(..), Error(..), ruleOf)
+import Grammar.AST.Parser (parse) as WithGrammar
 
-import Parsing (Parser, runParser, ParseError(..), Position(..)) as P
-import StringParser (Parser, runParser, ParseError(..), PosString) as SP
+import Parsing (runParser, ParseError(..), Position(..)) as P
+import StringParser (ParseError) as SP
 
 
 main :: Effect Unit
@@ -40,7 +40,6 @@ main = launchAff_ $ runSpec [consoleReporter] do
       withgrm = parsesWithGivenGrammarAs
       withgrmfile = parsesWithGrammarFromFile
       mkerr = mkParseError
-      mkserr = mkSParseError
     describe "parsing grammars (inline)" $ do
       it "should parse simple grammar (string)" $
         grm "main :- \"foobar\".\n" "main :- \"foobar\".\n"
@@ -817,10 +816,6 @@ failsToParseGrammarWithError grammarStr error =
 
 mkParseError :: String -> Int -> Int -> Int -> P.ParseError
 mkParseError err line column index = P.ParseError err $ P.Position { line, column, index }
-
-
-mkSParseError :: String -> Int -> SP.ParseError
-mkSParseError error pos = { error, pos }
 
 
 parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type) a. Show a => MonadThrow Ex.Error m ⇒ String → String -> AST a → m Unit

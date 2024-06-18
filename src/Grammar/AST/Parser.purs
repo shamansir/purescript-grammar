@@ -1,18 +1,20 @@
-module AST.Parser where
+module Grammar.AST.Parser where
 
 import Prelude
 
 import Data.Maybe (Maybe(..), maybe)
-import Data.Either (Either(..))
-import Data.Map (empty, lookup) as Map
-import Data.String (length, take) as String
-import Data.String.CodeUnits (charAt, length, splitAt, drop) as SCU
+import Data.Map (lookup) as Map
+import Data.String (length) as String
+import Data.String.CodeUnits (charAt, splitAt) as SCU
 -- import Data.String.CodePoints (head) as SCP
-import Data.Array (uncons, snoc, index, singleton) as Array
-import Data.Tuple.Nested ((/\), type (/\))
+import Data.Array (uncons, snoc, singleton) as Array
+import Data.Tuple.Nested ((/\))
 
-import Grammar (Grammar, Rule(..), AST(..), Tree(..), Attempt(..), ASTNode, RuleSet, At(..), Error(..), CharRule(..), Found(..), Expected(..), CharX(..), CaptureName, RuleName)
-import Grammar (set, main, found, eoi, expected, toChar) as G
+import Grammar (Grammar, Rule(..), RuleSet, CharRule(..), CharX, CaptureName, RuleName)
+import Grammar (set, main, toChar) as G
+import Grammar.AST.Tree (Tree(..))
+import Grammar.AST (AST(..), ASTNode, Attempt(..), At(..), Error(..), Found(..))
+import Grammar.AST (found, expected, eoi) as G
 
 
 type State = { position :: Int, next :: String }
