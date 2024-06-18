@@ -89,6 +89,20 @@ toRepr (Escaped ch) =
     "\\" <> String.singleton ch
 
 
+expands :: Rule -> Boolean
+expands = case _ of
+
+    Sequence _ -> true
+    Choice _ -> true
+    Ref _ _ -> true
+    RepSep _ _ -> true
+
+    Text _ -> false
+    CharRule _ -> false
+    Placeholder -> false
+    None -> false
+
+
 instance Show CharRule where
     show = case _ of
         Range chA chB -> "[" <> String.singleton chA <> "-" <> String.singleton chB <> "]"

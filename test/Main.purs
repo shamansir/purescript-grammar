@@ -23,6 +23,7 @@ import Node.FS.Sync (readTextFile, writeTextFile)
 import Grammar (Grammar, Rule(..), CharRule(..), CharX(..))
 import Grammar.Parser (parser) as Grammar
 import Grammar.AST.Tree (Tree(..))
+import Grammar.AST.Tree (node, leaf) as Tree
 import Grammar.AST (AST(..), ASTNode, Range, Attempt(..), Expected(..), Found(..), Error(..), ruleOf)
 import Grammar.AST.Parser (parse) as WithGrammar
 
@@ -684,113 +685,113 @@ main = launchAff_ $ runSpec [consoleReporter] do
 
 
 l_char :: Expected Char -> { at :: Int } -> ASTNode Int
-l_char (Expected ch) { at } = Leaf { rule : CharRule $ Single $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
+l_char (Expected ch) { at } = Tree.leaf { rule : CharRule $ Single $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
 
 
 l_neg_char :: Expected Char -> { at :: Int } -> ASTNode Int
-l_neg_char (Expected ch) { at } = Leaf { rule : CharRule $ Not $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
+l_neg_char (Expected ch) { at } = Tree.leaf { rule : CharRule $ Not $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
 
 
 l_char_rng :: { from :: Char, to :: Char } -> { at :: Int } -> ASTNode Int
-l_char_rng { from, to } { at } = Leaf { rule : CharRule $ Range from to, result : Match { start : at, end : at + 1 } 0 }
+l_char_rng { from, to } { at } = Tree.leaf { rule : CharRule $ Range from to, result : Match { start : at, end : at + 1 } 0 }
 
 
 l_char_any :: { at :: Int } -> ASTNode Int
-l_char_any { at } = Leaf { rule : CharRule Any, result : Match { start : at, end : at + 1 } 0 }
+l_char_any { at } = Tree.leaf { rule : CharRule Any, result : Match { start : at, end : at + 1 } 0 }
 
 
 l_text :: Expected String -> Range -> ASTNode Int
-l_text (Expected text) range = Leaf { rule : Text text, result : Match range 0 }
+l_text (Expected text) range = Tree.leaf { rule : Text text, result : Match range 0 }
 
 
 l_char_err :: Expected Char -> Found Char -> { pos :: Int } -> ASTNode Int
 l_char_err (Expected ch) found { pos } =
-  Leaf { rule : CharRule $ Single $ Raw ch, result : Fail pos $ CharacterError { expected : Expected $ Raw ch, found : found }  }
+  Tree.leaf { rule : CharRule $ Single $ Raw ch, result : Fail pos $ CharacterError { expected : Expected $ Raw ch, found : found }  }
 
 
 l_neg_char_err :: Expected Char -> { pos :: Int } -> ASTNode Int
 l_neg_char_err (Expected ch) { pos } =
-  Leaf { rule : CharRule $ Not $ Raw ch, result : Fail pos $ NegCharacterError { notExpected : Expected $ Raw ch, found : Found ch }  }
+  Tree.leaf { rule : CharRule $ Not $ Raw ch, result : Fail pos $ NegCharacterError { notExpected : Expected $ Raw ch, found : Found ch }  }
 
 
 l_char_rng_err :: { from :: Char, to :: Char } -> Found Char -> { pos :: Int } -> ASTNode Int
-l_char_rng_err { from, to } found { pos } = Leaf { rule : CharRule $ Range from to, result : Fail pos $ CharacterRangeError { found, from : Expected from, to : Expected to } }
+l_char_rng_err { from, to } found { pos } = Tree.leaf { rule : CharRule $ Range from to, result : Fail pos $ CharacterRangeError { found, from : Expected from, to : Expected to } }
 
 
 l_char_any_err :: Found Char -> { pos :: Int } -> ASTNode Int
-l_char_any_err found { pos } = Leaf { rule : CharRule Any, result : Fail pos $ AnyCharacterError { found } }
+l_char_any_err found { pos } = Tree.leaf { rule : CharRule Any, result : Fail pos $ AnyCharacterError { found } }
 
 
 l_text_err :: Expected String -> Found String -> { pos :: Int } -> ASTNode Int
 l_text_err (Expected text) found { pos } =
-  Leaf { rule : Text text, result : Fail pos $ TextError { expected : Expected text, found : found }  }
+  Tree.leaf { rule : Text text, result : Fail pos $ TextError { expected : Expected text, found : found }  }
 
 
 l_text_eoi_err :: { pos :: Int } -> ASTNode Int
 l_text_eoi_err { pos } =
   -- l_text_err (Expected "") EOI { pos }
-  Leaf { rule : Text "", result : Fail pos EndOfInput  }
+  Tree.leaf { rule : Text "", result : Fail pos EndOfInput  }
 
 
 n_ref :: String -> Range -> ASTNode Int -> ASTNode Int
 n_ref ruleName range rulenode =
-  Node
+  Tree.node
     { rule : Ref Nothing ruleName, result : Match range 0 }
     [ rulenode ]
 
 
 n_ref_capt :: { name :: String, as :: String } -> Range -> ASTNode Int -> ASTNode Int
 n_ref_capt { name, as } range rulenode =
-  Node
+  Tree.node
     { rule : Ref (Just as) name, result : Match range 0 }
     [ rulenode ]
 
 
 n_seq :: Range -> Array (ASTNode Int) -> ASTNode Int
 n_seq range items =
-  Node
+  Tree.node
     { rule : Sequence $ ruleOf <$> items, result : Match range 0 }
     items
 
 
 n_choice :: Range -> Array (ASTNode Int) -> ASTNode Int
 n_choice range items =
-  Node
+  Tree.node
     { rule : Choice $ ruleOf <$> items, result : Match range 0 }
     items
 
 
 n_rep_sep :: Range -> Array (ASTNode Int) -> ASTNode Int
 n_rep_sep range items =
-  Node
+  Tree.node
     { rule : RepSep None None, result : Match range 0 }
     items
 
 
 n_ref_err :: String -> { pos :: Int } -> ASTNode Int -> ASTNode Int
 n_ref_err ruleName { pos } rulenode =
-  Node
+  Tree.node
     { rule : Ref Nothing ruleName, result : Fail pos $ RuleApplicationFailed { capture : Nothing, name : ruleName } }
     [ rulenode ]
 
 
 n_seq_err :: { pos :: Int, entry :: Int } -> Array (ASTNode Int) -> ASTNode Int
 n_seq_err { pos, entry } items =
-  Node
+  Tree.node
     { rule : Sequence $ ruleOf <$> items, result : Fail pos $ SequenceError { index : entry } }
     items
 
 
 n_choice_err :: { pos :: Int } -> Array (ASTNode Int) -> ASTNode Int
 n_choice_err { pos } items =
-  Node
+  Tree.node
     { rule : Choice $ ruleOf <$> items, result : Fail pos $ ChoiceError { } }
     items
 
 
 n_rep_sep_err :: { pos :: Int, entry :: Int } -> Array (ASTNode Int) -> ASTNode Int
 n_rep_sep_err { pos, entry } items =
-  Node
+  Tree.node
     { rule : RepSep None None, result : Fail pos $ RepSepHangingOperatorError { occurence : entry } }
     items
 

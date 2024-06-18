@@ -13,6 +13,7 @@ import Data.Tuple.Nested ((/\))
 import Grammar (Grammar, Rule(..), RuleSet, CharRule(..), CharX, CaptureName, RuleName)
 import Grammar (set, main, toChar) as G
 import Grammar.AST.Tree (Tree(..))
+import Grammar.AST.Tree (leaf, node, value) as Tree
 import Grammar.AST (AST(..), ASTNode, Attempt(..), At(..), Error(..), Found(..))
 import Grammar.AST (found, expected, eoi) as G
 
@@ -306,7 +307,7 @@ _tryLeaf f rule lp = Parser \{ position, next } ->
             { value: unit
             , rest: { next: nextStr, position: nextPos }
             , node :
-                Leaf
+                Tree.leaf
                     { rule
                     , result : Match { start : curPos, end : nextPos } $ f rule
                     }
@@ -317,7 +318,7 @@ _tryLeaf f rule lp = Parser \{ position, next } ->
             { value: unit
             , rest: { position, next }
             , node :
-                Leaf
+                Tree.leaf
                     { rule
                     , result : Fail position error
                     }
@@ -334,7 +335,7 @@ _tryNode set f rule np =
         iterStep _ _ _ (IterStop state children result) =
             { value : unit
             , rest : state
-            , node : Node { rule, result } children
+            , node : Tree.node { rule, result } children
             }
         iterStep start resultsSoFar index (IterNext remaining nextRule at state) =
             if _mayContinue _attemptsLimit index then
@@ -390,8 +391,7 @@ _try p =
 
 
 _resultOf :: forall a. ASTNode a -> Attempt a
-_resultOf (Leaf { result }) = result
-_resultOf (Node { result } _) = result
+_resultOf = Tree.value >>> _.result
 
 
 _failed :: forall a. ASTNode a -> Boolean
@@ -420,7 +420,7 @@ _unexpectedStep =
 
 _unexpectedStep' :: forall a x. x -> State -> Step a x
 _unexpectedStep' value state =
-    { value, rest : state, node : Leaf { rule : None, result : Fail 0 EndOfInput } }
+    { value, rest : state, node : Tree.leaf { rule : None, result : Fail 0 EndOfInput } }
 
 
 _reachedAttemptsLimit :: forall a.  State -> Step a Unit
@@ -430,4 +430,4 @@ _reachedAttemptsLimit =
 
 _reachedAttemptsLimit' :: forall a x. x -> State -> Step a x
 _reachedAttemptsLimit' value state =
-    { value, rest : state, node : Leaf { rule : None, result : Fail state.position ReachedAttemptsLimit } }
+    { value, rest : state, node : Tree.leaf { rule : None, result : Fail state.position ReachedAttemptsLimit } }
