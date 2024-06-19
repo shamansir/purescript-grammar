@@ -2,17 +2,16 @@ module Grammar.AST where
 
 import Prelude
 
-
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.String (joinWith) as String
-import Data.String.CodeUnits (singleton) as String
-import Data.Newtype (class Newtype, unwrap)
+import Data.String.CodeUnits (singleton, slice) as String
+import Data.Newtype (class Newtype, unwrap, wrap)
 
 import Grammar (Rule(..), CharRule(..), RuleName, CharX, CaptureName)
 import Grammar (expands, toRepr) as G
 import Grammar.AST.Tree (Tree)
-import Grammar.AST.Tree (leaf, node, value, break) as Tree
+import Grammar.AST.Tree (leaf, node, value, break, catMaybes, set) as Tree
 
 
 type Range = { start :: Int, end :: Int }
@@ -26,6 +25,9 @@ data Attempt a
     | Fail Position Error
 
 
+derive instance Functor Attempt
+
+
 type ASTNode a =
     Tree { rule :: Rule, result :: Attempt a }
 
@@ -35,6 +37,7 @@ newtype AST a =
 
 
 derive instance Newtype (AST a) _
+derive instance Functor AST
 
 
 -- TODO: Merge `Found` and `Expected`, EndOfInput could also be expected
@@ -214,3 +217,39 @@ eoi = EOI
 
 ruleOf :: forall a. ASTNode a -> Rule
 ruleOf = Tree.value >>> _.rule
+
+
+fillChunks :: forall a. String -> AST a -> AST String
+fillChunks from = unwrap >>> _fillChunks from >>> wrap
+
+
+_fillChunks :: forall a. String -> ASTNode a -> ASTNode String
+_fillChunks from = map \x -> x { result = injectMatch x.result }
+    where
+        injectMatch :: Attempt a -> Attempt String
+        injectMatch = case _ of
+            Match rng _ -> Match rng $ String.slice rng.start rng.end from
+            Fail pos error -> Fail pos error
+
+
+{-
+collectMatches :: forall a. String -> AST a -> Tree { rule :: String, match :: String }
+collectMatches from = unwrap >>> _collectMatches from
+
+
+-- FIXME: could remove children that itself are no rules, but contain other rules inside
+-- TODO: maybe use YZ.flattenLocDepthFirst
+_collectMatches :: forall a. String -> ASTNode a -> Tree { rule :: String, match :: String }
+_collectMatches from = map convert >>> Tree.catMaybes { rule : "", match : "" }
+    where
+        tryAttempt :: Attempt a -> Maybe String
+        tryAttempt = case _ of
+            Match rng _ -> Just $ String.slice rng.start rng.end from
+            Fail _ _ -> Nothing
+        convert :: { rule :: Rule, result :: Attempt a } -> Maybe { rule :: String, match :: String }
+        convert { rule, result } =
+            tryAttempt result >>= \match -> case rule of
+                Ref mbCapture ruleName ->
+                    Just { rule : fromMaybe ruleName mbCapture, match }
+                _ -> Nothing
+-}

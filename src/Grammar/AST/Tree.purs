@@ -3,8 +3,11 @@ module Grammar.AST.Tree where
 import Prelude
 
 import Control.Comonad.Cofree (head, tail) as Y
+import Data.Maybe (Maybe, fromMaybe)
+import Data.Array (catMaybes) as Array
+import Data.Traversable (sequence)
 
-import Yoga.Tree (Tree, leaf, mkTree) as Y
+import Yoga.Tree (Tree, leaf, mkTree, setNodeValue) as Y
 
 
 type Tree n = Y.Tree n
@@ -31,14 +34,15 @@ break f t =
     f (Y.head t) $ Y.tail t
 
 
-{- break :: forall n a. { leaf :: n -> a, node :: n -> Array (Tree n) -> a } -> Tree n -> a
-break b = case _ of
-    Leaf n -> b.leaf n
-    Node n items -> b.node n items
--}
+set :: forall n. n -> Tree n -> Tree n
+set = Y.setNodeValue
 
 
--- toYogaTree :: forall n. Tree n -> Y.Tree n
--- toYogaTree = case _ of
---     Leaf n -> Y.leaf n
---     Node n children -> Y.mkTree n $ toYogaTree <$> children
+catMaybes :: forall n. n -> Tree (Maybe n) -> Tree n
+catMaybes rootDefault =
+    break deleteMaybes
+    where
+
+        deleteMaybes :: Maybe n -> Array (Tree (Maybe n)) -> Tree n
+        deleteMaybes mbVal =
+            node (fromMaybe rootDefault mbVal) <<< Array.catMaybes <<< map sequence
