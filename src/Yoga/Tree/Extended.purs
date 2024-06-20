@@ -1,6 +1,6 @@
-module Grammar.AST.Tree where
+module Yoga.Tree.Extended where
 
-import Prelude
+import Prelude (($), (<<<), map)
 
 import Control.Comonad.Cofree (head, tail) as Y
 import Data.Maybe (Maybe, fromMaybe)

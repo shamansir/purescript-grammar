@@ -20,10 +20,11 @@ import Test.Spec.Runner (runSpec)
 import Node.Encoding (Encoding(..)) as Encoding
 import Node.FS.Sync (readTextFile, writeTextFile)
 
-import Grammar (Grammar, Rule(..), CharRule(..), CharX(..))
+import Yoga.Tree.Extended (Tree(..))
+import Yoga.Tree.Extended (node, leaf) as Tree
+
+import Grammar (Grammar, Rule(..), WhichChar(..), CharX(..))
 import Grammar.Parser (parser) as Grammar
-import Grammar.AST.Tree (Tree(..))
-import Grammar.AST.Tree (node, leaf) as Tree
 import Grammar.AST (AST(..), ASTNode, Range, Attempt(..), Expected(..), Found(..), Error(..), ruleOf)
 import Grammar.AST.Parser (parse) as WithGrammar
 
@@ -685,19 +686,19 @@ main = launchAff_ $ runSpec [consoleReporter] do
 
 
 l_char :: Expected Char -> { at :: Int } -> ASTNode Int
-l_char (Expected ch) { at } = Tree.leaf { rule : CharRule $ Single $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
+l_char (Expected ch) { at } = Tree.leaf { rule : Char $ Single $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
 
 
 l_neg_char :: Expected Char -> { at :: Int } -> ASTNode Int
-l_neg_char (Expected ch) { at } = Tree.leaf { rule : CharRule $ Not $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
+l_neg_char (Expected ch) { at } = Tree.leaf { rule : Char $ Not $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
 
 
 l_char_rng :: { from :: Char, to :: Char } -> { at :: Int } -> ASTNode Int
-l_char_rng { from, to } { at } = Tree.leaf { rule : CharRule $ Range from to, result : Match { start : at, end : at + 1 } 0 }
+l_char_rng { from, to } { at } = Tree.leaf { rule : Char $ Range from to, result : Match { start : at, end : at + 1 } 0 }
 
 
 l_char_any :: { at :: Int } -> ASTNode Int
-l_char_any { at } = Tree.leaf { rule : CharRule Any, result : Match { start : at, end : at + 1 } 0 }
+l_char_any { at } = Tree.leaf { rule : Char Any, result : Match { start : at, end : at + 1 } 0 }
 
 
 l_text :: Expected String -> Range -> ASTNode Int
@@ -706,20 +707,20 @@ l_text (Expected text) range = Tree.leaf { rule : Text text, result : Match rang
 
 l_char_err :: Expected Char -> Found Char -> { pos :: Int } -> ASTNode Int
 l_char_err (Expected ch) found { pos } =
-  Tree.leaf { rule : CharRule $ Single $ Raw ch, result : Fail pos $ CharacterError { expected : Expected $ Raw ch, found : found }  }
+  Tree.leaf { rule : Char $ Single $ Raw ch, result : Fail pos $ CharacterError { expected : Expected $ Raw ch, found : found }  }
 
 
 l_neg_char_err :: Expected Char -> { pos :: Int } -> ASTNode Int
 l_neg_char_err (Expected ch) { pos } =
-  Tree.leaf { rule : CharRule $ Not $ Raw ch, result : Fail pos $ NegCharacterError { notExpected : Expected $ Raw ch, found : Found ch }  }
+  Tree.leaf { rule : Char $ Not $ Raw ch, result : Fail pos $ NegCharacterError { notExpected : Expected $ Raw ch, found : Found ch }  }
 
 
 l_char_rng_err :: { from :: Char, to :: Char } -> Found Char -> { pos :: Int } -> ASTNode Int
-l_char_rng_err { from, to } found { pos } = Tree.leaf { rule : CharRule $ Range from to, result : Fail pos $ CharacterRangeError { found, from : Expected from, to : Expected to } }
+l_char_rng_err { from, to } found { pos } = Tree.leaf { rule : Char $ Range from to, result : Fail pos $ CharacterRangeError { found, from : Expected from, to : Expected to } }
 
 
 l_char_any_err :: Found Char -> { pos :: Int } -> ASTNode Int
-l_char_any_err found { pos } = Tree.leaf { rule : CharRule Any, result : Fail pos $ AnyCharacterError { found } }
+l_char_any_err found { pos } = Tree.leaf { rule : Char Any, result : Fail pos $ AnyCharacterError { found } }
 
 
 l_text_err :: Expected String -> Found String -> { pos :: Int } -> ASTNode Int

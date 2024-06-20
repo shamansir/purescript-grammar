@@ -16,8 +16,11 @@ to generate this file without the comments in this block.
   , "console"
   , "control"
   , "effect"
+  , "foldable-traversable"
   , "free"
+  , "lists"
   , "maybe"
+  , "newtype"
   , "ordered-collections"
   , "parsing"
   , "prelude"
@@ -28,5 +31,5 @@ to generate this file without the comments in this block.
   , "yoga-tree"
   ]
 , packages = ./packages.dhall
-, sources = [ "src/**/*.purs", "test/**/*.purs" ]
+, sources = [ "src/**/*.purs" ]
 }

@@ -10,10 +10,9 @@ import Data.String.CodeUnits (charAt, splitAt) as SCU
 import Data.Array (uncons, snoc, singleton) as Array
 import Data.Tuple.Nested ((/\))
 
-import Grammar (Grammar, Rule(..), RuleSet, CharRule(..), CharX, CaptureName, RuleName)
+import Yoga.Tree.Extended (leaf, node, value) as Tree
+import Grammar (Grammar, Rule(..), RuleSet, WhichChar(..), CharX, CaptureName, RuleName)
 import Grammar (set, main, toChar) as G
-import Grammar.AST.Tree (Tree(..))
-import Grammar.AST.Tree (leaf, node, value) as Tree
 import Grammar.AST (AST(..), ASTNode, Attempt(..), At(..), Error(..), Found(..))
 import Grammar.AST (found, expected, eoi) as G
 
@@ -55,10 +54,10 @@ parseRule :: forall a. RuleSet -> (Rule -> a) -> Rule -> P a
 parseRule set f rule =
     case rule of
         Text expected -> _tryLeaf f rule $ _text expected
-        CharRule (Single charX) -> _tryLeaf f rule $ _char charX
-        CharRule (Not charX) -> _tryLeaf f rule $ _negChar charX
-        CharRule (Range from to) -> _tryLeaf f rule $ _charRange { from, to }
-        CharRule Any -> _tryLeaf f rule $ _anyChar
+        Char (Single charX) -> _tryLeaf f rule $ _char charX
+        Char (Not charX) -> _tryLeaf f rule $ _negChar charX
+        Char (Range from to) -> _tryLeaf f rule $ _charRange { from, to }
+        Char Any -> _tryLeaf f rule $ _anyChar
         Sequence sequence -> _tryNode set f rule $ _sequence sequence
         Choice options -> _tryNode set f rule $ _choice options
         Ref mbCapture ruleName -> _tryNode set f rule $ _ref mbCapture ruleName

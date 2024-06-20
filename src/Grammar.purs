@@ -8,6 +8,11 @@ import Data.Map (empty, lookup, toUnfoldable) as Map
 import Data.String (joinWith) as String
 import Data.String.CodeUnits (singleton) as String
 import Data.Tuple (uncurry) as Tuple
+import Data.Array ((:))
+import Data.Array (singleton) as Array
+
+import Yoga.Tree.Extended (Tree)
+import Yoga.Tree.Extended (node, leaf, set) as Tree
 
 
 type RuleSet = Map RuleName Rule
@@ -21,13 +26,13 @@ data Rule
     | Choice (Array Rule)
     | Ref (Maybe CaptureName) RuleName
     | Text String
-    | CharRule CharRule
+    | Char WhichChar
     | RepSep Rule Rule
     | Placeholder
     | None
 
 
-data CharRule
+data WhichChar
     = Range Char Char
     | Not CharX
     | Single CharX
@@ -43,6 +48,20 @@ type CaptureName = String
 data CharX
     = Escaped Char
     | Raw Char
+
+
+data RuleKnot
+    = KRoot
+    | KMain
+    | KRuleDef RuleName
+    | KSequence
+    | KChoice
+    | KRepSep
+    | KRef (Maybe CaptureName) RuleName
+    | KText String
+    | KChar WhichChar
+    | KPlaceholder
+    | KNone
 
 
 empty :: Grammar
@@ -94,16 +113,55 @@ expands = case _ of
 
     Sequence _ -> true
     Choice _ -> true
-    Ref _ _ -> true
+    Ref _ _ -> true -- FIXME: does `Ref` really expands? In the resulting AST it probably does
     RepSep _ _ -> true
 
     Text _ -> false
-    CharRule _ -> false
+    Char _ -> false
     Placeholder -> false
     None -> false
 
 
-instance Show CharRule where
+expandsK :: RuleKnot -> Boolean
+expandsK = case _ of
+
+    KRoot -> true
+    KMain -> true
+    KRuleDef _ -> true
+
+    KSequence -> true
+    KChoice -> true
+    KRepSep -> true
+
+    KRef _ _ -> false
+    KText _ -> false
+    KChar _ -> false
+    KPlaceholder -> false
+    KNone -> false
+
+
+toTree :: Grammar -> Tree RuleKnot
+toTree (Grammar mainRule ruleSet) =
+    Tree.node KRoot $ convertMainKnot mainRule : (Tuple.uncurry convertRuleDef <$> Map.toUnfoldable ruleSet)
+    where
+        convertMainKnot :: Rule -> Tree RuleKnot
+        convertMainKnot = Tree.node KMain <<< Array.singleton <<< convertRule
+        convertRuleDef :: RuleName -> Rule -> Tree RuleKnot
+        convertRuleDef ruleName = Tree.node (KRuleDef ruleName) <<< Array.singleton <<< convertRule
+        convertRule :: Rule -> Tree RuleKnot
+        convertRule = case _ of
+            Sequence children -> Tree.node KSequence $ convertRule <$> children
+            Choice children -> Tree.node KChoice $ convertRule <$> children
+            Ref mbCapture ruleName -> Tree.leaf $ KRef mbCapture ruleName
+            RepSep rep sep -> Tree.node KRepSep [ convertRule rep, convertRule sep ]
+
+            Text text -> Tree.leaf $ KText text
+            Char which -> Tree.leaf $ KChar which
+            Placeholder -> Tree.leaf KPlaceholder
+            None -> Tree.leaf KNone
+
+
+instance Show WhichChar where
     show = case _ of
         Range chA chB -> "[" <> String.singleton chA <> "-" <> String.singleton chB <> "]"
         Not char -> "^" <> show (Single char)
@@ -123,7 +181,7 @@ instance Show Rule where
                 Just captureName -> captureName <> ":" <> ruleName
                 Nothing -> ruleName
         Text text -> show text
-        CharRule chrule -> show chrule
+        Char chrule -> show chrule
         RepSep repRule sepRule ->
             -- TODO: Some operator for RepSep
             "repSep(" <> show repRule <> "," <> show sepRule <> ")"

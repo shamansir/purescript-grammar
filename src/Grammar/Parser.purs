@@ -86,7 +86,7 @@ rule = defer \_ ->
 
 anyChar :: P Grammar.Rule
 anyChar = defer \_ ->
-    Grammar.CharRule Grammar.Any <$ P.char '.'
+    Grammar.Char Grammar.Any <$ P.char '.'
 
 
 seq :: P Grammar.Rule
@@ -131,21 +131,21 @@ text = defer \_ ->
 
 char :: P Grammar.Rule
 char = defer \_ ->
-    Grammar.CharRule <$>
+    Grammar.Char <$>
     Grammar.Single <$>
     _char
 
 
 notChar :: P Grammar.Rule
 notChar = defer \_ ->
-    Grammar.CharRule <$>
+    Grammar.Char <$>
     Grammar.Not <$> do
     (P.char '^' *> _char)
 
 
 charRange :: P Grammar.Rule
 charRange = defer \_ ->
-    Grammar.CharRule <$>
+    Grammar.Char <$>
     Tuple.uncurry Grammar.Range <$>
     P.between
         (P.char '[')

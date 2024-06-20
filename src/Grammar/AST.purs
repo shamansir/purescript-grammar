@@ -8,10 +8,11 @@ import Data.String (joinWith) as String
 import Data.String.CodeUnits (singleton, slice) as String
 import Data.Newtype (class Newtype, unwrap, wrap)
 
-import Grammar (Rule(..), CharRule(..), RuleName, CharX, CaptureName)
+import Yoga.Tree.Extended (Tree)
+import Yoga.Tree.Extended (break, leaf, value) as Tree
+
+import Grammar (Rule(..), WhichChar(..), RuleName, CharX, CaptureName)
 import Grammar (expands, toRepr) as G
-import Grammar.AST.Tree (Tree)
-import Grammar.AST.Tree (leaf, node, value, break, catMaybes, set) as Tree
 
 
 type Range = { start :: Int, end :: Int }
@@ -125,7 +126,7 @@ instance Show a => Show (AST a) where
                     _ -> Nothing
                 Ref _ rule -> Just $ At rule
                 Text _ -> Nothing
-                CharRule _ -> Nothing
+                Char _ -> Nothing
                 Placeholder -> Nothing
                 None -> Nothing
 
@@ -135,7 +136,7 @@ instance Show a => Show (AST a) where
             Choice _ -> "choice"
             Ref mbCapture name -> "ref:" <> fromMaybe name mbCapture
             Text _ -> "text"
-            CharRule r -> case r of
+            Char r -> case r of
                 Single _ -> "char"
                 Any -> "any"
                 Not _ -> "not-char"
@@ -201,6 +202,10 @@ instance Show At where
         RepOf -> "rep"
         SepOf -> "sep"
         Nil -> "-"
+
+
+empty :: forall a. AST a
+empty = AST $ Tree.leaf { rule : None, result : Fail 0 Unknown }
 
 
 found :: forall a. a -> Found a
