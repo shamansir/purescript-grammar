@@ -20,10 +20,12 @@ import Test.Spec.Runner (runSpec)
 import Node.Encoding (Encoding(..)) as Encoding
 import Node.FS.Sync (readTextFile, writeTextFile)
 
+import Yoga.Tree (showTree)
 import Yoga.Tree.Extended (Tree(..))
 import Yoga.Tree.Extended (node, leaf) as Tree
 
 import Grammar (Grammar, Rule(..), WhichChar(..), CharX(..))
+import Grammar (toTree) as Grammar
 import Grammar.Parser (parser) as Grammar
 import Grammar.AST (AST(..), ASTNode, Range, Attempt(..), Expected(..), Found(..), Error(..), ruleOf)
 import Grammar.AST.Parser (parse) as WithGrammar
@@ -657,32 +659,37 @@ main = launchAff_ $ runSpec [consoleReporter] do
                   ]
 
 
-      pending' "parses `blocks`" $
-        withgrmfile "blocks"
-      it "parses `contracts`" $
-        withgrmfile "contracts"
-      it "parses `datalog`" $
-        withgrmfile "datalog"
-      it "parses `datalog2`" $
-        withgrmfile "datalog2"
-      it "parses `fp`" $
-        withgrmfile "fp"
-      pending' "parses `grammar`" $
-        withgrmfile "grammar"
-      it "parses `json`" $
-        withgrmfile "json"
-      pending' "parses `modelica`" $
-        withgrmfile "modelica"
-      pending' "parses `opt`" $
-        withgrmfile "opt"
-      it "parses `plainText`" $
-        withgrmfile "plainText"
-      it "parses `sql`" $
-        withgrmfile "sql"
-      -- it "parses `test`" $
-      --   withgrmfile "test"
-      it "parses `treeSql`" $
-        withgrmfile "treeSql"
+    describe "grammars from files" $ do
+        pending' "parses `blocks`" $
+          withgrmfile "blocks"
+        it "parses `contracts`" $
+          withgrmfile "contracts"
+        it "parses `datalog`" $
+          withgrmfile "datalog"
+        it "parses `datalog2`" $
+          withgrmfile "datalog2"
+        it "parses `fp`" $
+          withgrmfile "fp"
+        pending' "parses `grammar`" $
+          withgrmfile "grammar"
+        it "parses `json`" $
+          withgrmfile "json"
+        pending' "parses `modelica`" $
+          withgrmfile "modelica"
+        pending' "parses `opt`" $
+          withgrmfile "opt"
+        it "parses `plainText`" $
+          withgrmfile "plainText"
+        it "parses `sql`" $
+          withgrmfile "sql"
+        -- it "parses `test`" $
+        --   withgrmfile "test"
+        it "parses `treeSql`" $
+          withgrmfile "treeSql"
+
+    describe "converting to tree" $
+      it "should properly convert" $
+        convertsGrammarToTree "main :- 'a'." "<root>\n|----> <main>\n       |----> <ch:a>\n"
 
 
 l_char :: Expected Char -> { at :: Int } -> ASTNode Int
@@ -826,6 +833,13 @@ parsesWithGivenGrammarAs str grammarStr expectation =
     eGrammar = P.runParser grammarStr Grammar.parser
     buildAst grammar = WithGrammar.parse grammar (const 0) str
   in (show <$> buildAst <$> lmap convertError eGrammar) `shouldEqual` (Right $ show expectation)
+
+
+convertsGrammarToTree :: ∀ (m ∷ Type -> Type). MonadThrow Ex.Error m ⇒ String -> String → m Unit
+convertsGrammarToTree grammarStr expectation =
+  let
+    eGrammar = P.runParser grammarStr Grammar.parser
+  in (showTree <$> Grammar.toTree <$> lmap convertError eGrammar) `shouldEqual` (Right expectation)
 
 
 parsesWithGrammarFromFile :: ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Ex.Error m => String -> m Unit

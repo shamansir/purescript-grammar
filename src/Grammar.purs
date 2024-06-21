@@ -12,7 +12,7 @@ import Data.Array ((:))
 import Data.Array (singleton) as Array
 
 import Yoga.Tree.Extended (Tree)
-import Yoga.Tree.Extended (node, leaf, set) as Tree
+import Yoga.Tree.Extended (node, leaf) as Tree
 
 
 type RuleSet = Map RuleName Rule
@@ -187,6 +187,33 @@ instance Show Rule where
             "repSep(" <> show repRule <> "," <> show sepRule <> ")"
         Placeholder -> "???"
         None -> "x"
+
+
+instance Show RuleKnot where
+    show = case _ of
+        KRoot -> "<root>"
+        KMain -> "<main>"
+        KRuleDef ruleName -> "<def:" <> ruleName <> ">"
+        KSequence -> "<sequence>"
+        KChoice -> "<choice>"
+        KRepSep -> "<rep-sep>"
+        KRef mbCapture ruleName ->
+            "<ref:" <> ruleName
+                    <> case mbCapture of
+                            Just capture -> "@" <> capture
+                            Nothing -> ""
+                    <> ">"
+        KText text -> "<text:(" <> text <> ")>"
+        KChar which ->
+            "<ch:" <>
+            case which of
+                Any -> "any"
+                Range from to -> "[" <> String.singleton from <> "-" <> String.singleton to <> "]"
+                Not chx -> "^" <> String.singleton (toChar chx)
+                Single chx -> String.singleton (toChar chx)
+            <> ">"
+        KPlaceholder -> "<placeholder>"
+        KNone -> "<?>"
 
 
 instance Show Grammar where
