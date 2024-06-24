@@ -220,6 +220,10 @@ eoi :: forall a. Found a
 eoi = EOI
 
 
+root :: forall a. AST a -> ASTNode a
+root = unwrap
+
+
 ruleOf :: forall a. ASTNode a -> Rule
 ruleOf = Tree.value >>> _.rule
 

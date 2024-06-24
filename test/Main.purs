@@ -351,6 +351,18 @@ main = launchAff_ $ runSpec [consoleReporter] do
               , n_ref "fo" { start : 2, end : 3 } $ n_choice { start : 2, end : 3 } [ l_char_err (Expected 'f') (Found 'o') { pos : 2 }, l_char (Expected 'o') { at : 2 } ]
               , l_text_eoi_err { pos : 3 }
               ]
+      it "parsing rep/sep with empty separators and repeating input (should compute the complete input)" $
+        withgrm "aaa"
+          """main :- repSep('a',"").
+          """
+          $ AST $ n_rep_sep { start : 0, end : 3 }
+              [ l_char (Expected 'a') { at : 0 }
+              , l_text (Expected "") { start : 1, end : 1 }
+              , l_char (Expected 'a') { at : 1 }
+              , l_text (Expected "") { start : 2, end : 2 }
+              , l_char (Expected 'a') { at : 2 }
+              , l_text_eoi_err { pos : 3 }
+              ]
       it "parsing rep/sep when input is empty (should pass)" $
         withgrm ""
           """main :- repSep(" ","\n")."""
