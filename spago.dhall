@@ -29,6 +29,7 @@ to generate this file without the comments in this block.
   , "stringutils"
   , "tuples"
   , "yoga-tree"
+  , "yoga-tree-utils"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs" ]
