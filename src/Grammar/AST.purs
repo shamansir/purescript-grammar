@@ -21,7 +21,7 @@ type Range = { start :: Int, end :: Int }
 type Position = Int
 
 
-data Attempt a
+data Attempt a -- TODO: Attempt f a, f is for failure value
     = Match Range a
     | Fail Position Error
 
@@ -29,8 +29,12 @@ data Attempt a
 derive instance Functor Attempt
 
 
+type Cell a =
+    { rule :: Rule, result :: Attempt a }
+
+
 type ASTNode a =
-    Tree { rule :: Rule, result :: Attempt a }
+    Tree (Cell a)
 
 
 newtype AST a =
@@ -230,6 +234,22 @@ ruleOf = Tree.value >>> _.rule
 
 fillChunks :: forall a. String -> AST a -> AST String
 fillChunks from = unwrap >>> _fillChunks from >>> wrap
+
+
+rebuild :: forall a b. (Cell a -> Cell b) -> AST a -> AST b
+rebuild f =
+    unwrap >>> map f >>> wrap
+
+
+mapBy :: forall a b. (Cell a -> b) -> AST a -> AST b
+mapBy f =
+    rebuild $ \cell -> let b = f cell in { rule : cell.rule, result : b <$ cell.result }
+
+
+match :: forall a. Cell a -> Maybe a
+match = _.result >>> case _ of
+    Match _ a -> Just a
+    Fail _ _ -> Nothing
 
 
 _fillChunks :: forall a. String -> ASTNode a -> ASTNode String
