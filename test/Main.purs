@@ -12,7 +12,7 @@ import Data.Either (Either(..))
 import Data.Bifunctor (lmap)
 
 import Effect.Aff (launchAff_)
-import Test.Spec (pending, describe, it, describeOnly, itOnly, pending')
+import Test.Spec (describe, it, pending')
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
