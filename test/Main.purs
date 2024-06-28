@@ -27,7 +27,7 @@ import Yoga.Tree.Extended (node, leaf) as Tree
 import Grammar (Grammar, Rule(..), WhichChar(..), CharX(..))
 import Grammar (toTree) as Grammar
 import Grammar.Parser (parser) as Grammar
-import Grammar.ParserPeg (grammar) as GrammarPeg
+import Grammar.Self.Parser (grammar) as Self
 import Grammar.AST (AST(..), ASTNode, Range, Attempt(..), Expected(..), Found(..), Error(..), ruleOf)
 import Grammar.AST.Parser (parse) as WithGrammar
 
@@ -822,7 +822,7 @@ useGrammar grammarStr = P.runParser grammarStr Grammar.parser
 
 
 -- useGrammar' :: String -> Either P.ParseError Grammar
--- useGrammar' grammarStr = Right $ ?wh $ WithGrammar.parse GrammarPeg.grammar (const unit) grammarStr
+-- useGrammar' grammarStr = Right $ ?wh $ WithGrammar.parse Self.grammar (const unit) grammarStr
 
 
 parsesGrammar ∷ ∀ (m ∷ Type -> Type). MonadThrow Ex.Error m ⇒ String → String → m Unit
@@ -834,7 +834,7 @@ parsesGrammarFile ∷ ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Ex.E
 parsesGrammarFile fileName = do
   grammarStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar"
   expectation <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar.expected"
-  let eGrammar =  useGrammar grammarStr
+  let eGrammar = useGrammar grammarStr
   liftEffect $ writeTextFile Encoding.UTF8 ("./test/grammars/" <> fileName <> ".grammar.result") $ reportE eGrammar
   (show <$> eGrammar) `shouldEqual` (Right expectation)
 

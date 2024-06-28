@@ -1,4 +1,4 @@
-module Grammar.ParserPeg where
+module Grammar.Self.Parser where
 
 import Prelude
 
