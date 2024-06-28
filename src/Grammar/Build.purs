@@ -5,6 +5,7 @@ import Prelude
 
 import Data.Maybe (Maybe(..))
 import Data.Map (fromFoldable) as Map
+import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested (type (/\))
 
 -- import Record.Extra
@@ -13,8 +14,12 @@ import Grammar (Grammar(..), Rule(..), WhichChar(..), RuleName, CaptureName, Cha
 
 
 
+infixr 6 type Tuple as :-
+infixr 6 Tuple as :-
+
+
 -- TODO: grammar :: forall rules. Rule -> Record rules -> Grammar
-grammar :: Rule -> Array (RuleName /\ Rule) -> Grammar
+grammar :: Rule -> Array (RuleName :- Rule) -> Grammar
 grammar main = Grammar main <<< Map.fromFoldable
 
 
@@ -64,6 +69,10 @@ escape = Escaped
 
 notChar' :: CharX -> Rule
 notChar' = Char <<< Not
+
+
+range :: { from :: Char, to :: Char } -> Rule
+range { from, to } = Char $ Range from to
 
 
 placeholder :: Rule

@@ -27,6 +27,7 @@ import Yoga.Tree.Extended (node, leaf) as Tree
 import Grammar (Grammar, Rule(..), WhichChar(..), CharX(..))
 import Grammar (toTree) as Grammar
 import Grammar.Parser (parser) as Grammar
+import Grammar.ParserPeg (grammar) as GrammarPeg
 import Grammar.AST (AST(..), ASTNode, Range, Attempt(..), Expected(..), Found(..), Error(..), ruleOf)
 import Grammar.AST.Parser (parse) as WithGrammar
 
@@ -816,23 +817,31 @@ n_rep_sep_err { pos, entry } items =
     items
 
 
+useGrammar :: String -> Either P.ParseError Grammar
+useGrammar grammarStr = P.runParser grammarStr Grammar.parser
+
+
+-- useGrammar' :: String -> Either P.ParseError Grammar
+-- useGrammar' grammarStr = Right $ ?wh $ WithGrammar.parse GrammarPeg.grammar (const unit) grammarStr
+
+
 parsesGrammar ∷ ∀ (m ∷ Type -> Type). MonadThrow Ex.Error m ⇒ String → String → m Unit
 parsesGrammar grammarStr expectation =
-  (show <$> P.runParser grammarStr Grammar.parser) `shouldEqual` (Right expectation)
+  (show <$> useGrammar grammarStr) `shouldEqual` (Right expectation)
 
 
 parsesGrammarFile ∷ ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Ex.Error m ⇒ String → m Unit
 parsesGrammarFile fileName = do
   grammarStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar"
   expectation <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar.expected"
-  let eGrammar =  P.runParser grammarStr Grammar.parser
+  let eGrammar =  useGrammar grammarStr
   liftEffect $ writeTextFile Encoding.UTF8 ("./test/grammars/" <> fileName <> ".grammar.result") $ reportE eGrammar
   (show <$> eGrammar) `shouldEqual` (Right expectation)
 
 
 failsToParseGrammarWithError ∷ ∀ (m ∷ Type -> Type). MonadThrow Ex.Error m ⇒ String → P.ParseError → m Unit
 failsToParseGrammarWithError grammarStr error =
-  (show <$> P.runParser grammarStr Grammar.parser) `shouldEqual` (Left error)
+  (show <$> useGrammar grammarStr) `shouldEqual` (Left error)
 
 
 mkParseError :: String -> Int -> Int -> Int -> P.ParseError
@@ -842,7 +851,7 @@ mkParseError err line column index = P.ParseError err $ P.Position { line, colum
 parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type) a. Show a => MonadThrow Ex.Error m ⇒ String → String -> AST a → m Unit
 parsesWithGivenGrammarAs str grammarStr expectation =
   let
-    eGrammar = P.runParser grammarStr Grammar.parser
+    eGrammar = useGrammar grammarStr
     buildAst grammar = WithGrammar.parse grammar (const 0) str
   in (show <$> buildAst <$> lmap convertError eGrammar) `shouldEqual` (Right $ show expectation)
 
@@ -850,7 +859,7 @@ parsesWithGivenGrammarAs str grammarStr expectation =
 convertsGrammarToTree :: ∀ (m ∷ Type -> Type). MonadThrow Ex.Error m ⇒ String -> String → m Unit
 convertsGrammarToTree grammarStr expectation =
   let
-    eGrammar = P.runParser grammarStr Grammar.parser
+    eGrammar = useGrammar grammarStr
   in (showTree <$> Grammar.toTree <$> lmap convertError eGrammar) `shouldEqual` (Right expectation)
 
 
@@ -860,7 +869,7 @@ parsesWithGrammarFromFile fileName = do
     sourceStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/sources/" <> fileName <> ".src"
     expectationStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/sources/" <> fileName <> ".src.expected"
     let
-      eGrammar = P.runParser grammarStr Grammar.parser
+      eGrammar = useGrammar grammarStr
       buildAst :: Grammar -> AST Int
       buildAst grammar = WithGrammar.parse grammar (const 0) sourceStr
       eAST = buildAst <$> lmap convertError eGrammar
