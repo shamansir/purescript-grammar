@@ -129,34 +129,36 @@ load (Many _ ruleMatches) =
                                     Just (Rule text "ident" _) -> text
                                     _ -> ""
                             mbRule =
-                                Array.index matches 4 >>= extractRule
+                                Array.index matches 4 >>= extractRule "rule"
                         in
                             mbRule <#> \rule -> { ruleName, rule }
                     _ -> Nothing
             _ -> Nothing
 
-        extractRule :: Match String -> Maybe Grammar.Rule
-        extractRule = case _ of
-            Rule _ "rule" rmatch ->
-                case rmatch of
-                    OneOf _ 0 oomatch -> -- seq
-                        seq oomatch
-                    OneOf _ 1 oomatch -> -- choice
-                        choice oomatch
-                    OneOf _ 2 oomatch -> -- charRule
-                        charRule oomatch
-                    OneOf _ 3 oomatch -> -- text
-                        text oomatch
-                    OneOf _ 4 oomatch -> -- repSep
-                        repSep oomatch
-                    OneOf _ 5 oomatch -> -- placeholder
-                        case oomatch of
-                            Rule _ "placeholder" _ ->
-                                Just G.Placeholder
-                            _ -> Nothing
-                    OneOf _ 6 oomatch -> -- ref
-                        ref oomatch
-                    _ -> Nothing
+        extractRule :: String -> Match String -> Maybe Grammar.Rule
+        extractRule expectedName = case _ of
+            Rule _ rname rmatch ->
+                if rname == expectedName then
+                    case rmatch of
+                        OneOf _ 0 oomatch -> -- seq
+                            seq oomatch
+                        OneOf _ 1 oomatch -> -- choice
+                            choice oomatch
+                        OneOf _ 2 oomatch -> -- charRule
+                            charRule oomatch
+                        OneOf _ 3 oomatch -> -- text
+                            text oomatch
+                        OneOf _ 4 oomatch -> -- repSep
+                            repSep oomatch
+                        OneOf _ 5 oomatch -> -- placeholder
+                            case oomatch of
+                                Rule _ "placeholder" _ ->
+                                    Just G.Placeholder
+                                _ -> Nothing
+                        OneOf _ 6 oomatch -> -- ref
+                            ref oomatch
+                        _ -> Nothing
+                else Nothing
             _ -> Nothing
 
         ref :: Match String -> Maybe G.Rule
@@ -184,14 +186,14 @@ load (Many _ ruleMatches) =
         repSep :: Match String -> Maybe G.Rule
         repSep oomatch =
             case oomatch of
-                Rule _ "pepSep" repSepMatch ->
+                Rule _ "repSep" repSepMatch ->
                     case repSepMatch of
                         Many _ sequence ->
                             let
                                 mbRep =
-                                    Array.index sequence 2 >>= extractRule
+                                    Array.index sequence 2 >>= extractRule "rep"
                                 mbSep =
-                                    Array.index sequence 4 >>= extractRule
+                                    Array.index sequence 4 >>= extractRule "sep"
                             in
                                 G.RepSep <$> mbRep <*> mbSep
                         _ -> Nothing
@@ -205,7 +207,7 @@ load (Many _ ruleMatches) =
                         Many _ sequence ->
                             case Array.index sequence 2 of
                                 Just (Many _ rules) ->
-                                    Just $ G.Sequence $ Array.catMaybes $ extractRule <$> rules
+                                    Just $ G.Sequence $ Array.catMaybes $ extractRule "rule" <$> rules
                                 _ -> Nothing
                         _ -> Nothing
                 _ -> Nothing
@@ -218,7 +220,7 @@ load (Many _ ruleMatches) =
                         Many _ sequence ->
                             case Array.index sequence 2 of
                                 Just (Many _ rules) ->
-                                    Just $ G.Choice $ Array.catMaybes $ extractRule <$> rules
+                                    Just $ G.Choice $ Array.catMaybes $ extractRule "rule" <$> rules
                                 _ -> Nothing
                         _ -> Nothing
                 _ -> Nothing
