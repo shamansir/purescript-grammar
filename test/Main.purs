@@ -706,9 +706,38 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "should properly convert" $
         convertsGrammarToTree "main :- 'a'." "<root>\n|----> <main>\n       |----> <ch:a>\n"
 
-    describe "extract" $
-      it "should properly parse grammar and extract it from AST" $
-        parsesGrammarWithGrammar "grammar2"
+    describe "extract" $ do
+      describe "should properly parse grammar and extract it from AST" $ do
+        it "parses simple parser with strings" $ do
+          parsesGivenGrammarWithGrammar "main :- \"foo\"." "main :- \"foo\".\n"
+        it "parses simple parser with characters" $ do
+          parsesGivenGrammarWithGrammar "main :- 'f'." "main :- 'f'.\n"
+        it "parses simple parser with any char" $ do
+          parsesGivenGrammarWithGrammar "main :- .." "main :- ..\n"
+        it "parses simple parser with char range" $ do
+          parsesGivenGrammarWithGrammar "main :- [a-z]." "main :- [a-z].\n"
+        it "parses simple parser with not-characters" $ do
+          parsesGivenGrammarWithGrammar "main :- [^'f']." "main :- [^'f'].\n"
+        it "parses simple parser with not-characters & range" $ do
+          parsesGivenGrammarWithGrammar "main :- [^[a-z]]." "main :- [^[a-z]].\n"
+        it "parses simple parser with not-characters & any char" $ do
+          parsesGivenGrammarWithGrammar "main :- [^.]." "main :- [^.].\n"
+        it "parses simple parser with sequence" $ do
+          parsesGivenGrammarWithGrammar "main :- ['a','b','c']." "main :- ['a','b','c'].\n"
+        it "parses simple parser with choice" $ do
+          parsesGivenGrammarWithGrammar "main :- ('a'|'b'|'c')." "main :- ('a'|'b'|'c').\n"
+        it "parses simple parser with choice & sequence" $ do
+          parsesGivenGrammarWithGrammar "main :- ('a'|'b'|['f','o','o']|'c')." "main :- ('a'|'b'|['f','o','o']|'c').\n"
+        it "parses simple parser with sequence & choice" $ do
+          parsesGivenGrammarWithGrammar "main :- ['a','b',('f'|'o'|'o'),'c']." "main :- ['a','b',('f'|'o'|'o'),'c'].\n"
+        it "parses simple parser with repSep" $ do
+          parsesGivenGrammarWithGrammar "main :- repSep('foo','a')." "main :- repSep('foo','a').\n"
+        it "parses simple parser with ref to other rule" $ do
+          parsesGivenGrammarWithGrammar "main :- foo.\nfoo :- \"foo\"." "main :- foo.\nfoo :- \"foo\".\n"
+        it "parses simple parser with capture-ref to other rule" $ do
+          parsesGivenGrammarWithGrammar "main :- as:foo.\nfoo :- \"foo\"." "main :- as:foo.\nfoo :- \"foo\".\n"
+        -- pending' "parses simple parser with characters" $ do
+        --   parsesGrammarWithGrammar "grammar2"
 
 
 
@@ -884,16 +913,24 @@ parsesWithGrammarFromFile fileName = do
     (show <$> eAST) `shouldEqual` (Right expectationStr)
 
 
+parsesGivenGrammarWithGrammar :: ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Ex.Error m => String -> String -> m Unit
+parsesGivenGrammarWithGrammar grammarToParse expectationStr = do
+    let
+      buildAst :: AST String
+      buildAst = fillChunks grammarToParse $ WithGrammar.parse Self.grammar (const unit) grammarToParse
+    -- liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
+    (show $ Self.extract buildAst) `shouldEqual` expectationStr
+
+
 parsesGrammarWithGrammar :: ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Ex.Error m => String -> m Unit
 parsesGrammarWithGrammar fileName = do
     grammarToParseStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar"
-    -- expectationStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/sources/" <> fileName <> ".src.expected"
+    expectationStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/sources/" <> fileName <> ".src.expected"
     let
-      targetStr = "main :- \"foo\"." -- grammarToParseStr
       buildAst :: AST String
-      buildAst = fillChunks targetStr $ WithGrammar.parse Self.grammar (const unit) targetStr
+      buildAst = fillChunks grammarToParseStr $ WithGrammar.parse Self.grammar (const unit) grammarToParseStr
     -- liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
-    (show $ Self.extract buildAst) `shouldEqual` "main :- \"foo\".\n"
+    (show $ Self.extract buildAst) `shouldEqual` expectationStr
 
 
 
