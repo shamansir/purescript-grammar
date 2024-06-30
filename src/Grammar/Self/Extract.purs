@@ -7,8 +7,9 @@ import Data.Array (index, catMaybes, find, mapWithIndex) as Array
 import Data.Tuple (fst, snd) as Tuple
 import Data.Tuple.Nested ((/\))
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.Map (fromFoldable, lookup) as Map
+import Data.Map (fromFoldable, lookup, delete) as Map
 import Data.Foldable (fold)
+import Data.String (joinWith) as String
 import Data.String.CodeUnits (charAt) as String
 
 import Grammar (Grammar(..))
@@ -33,6 +34,14 @@ data Match a
     | Many a (Array (Match a))
     -- | Reps a (Array (Match a))
     | Value a
+
+
+instance Show a => Show (Match a) where
+    show = case _ of
+        Rule a name match -> "(" <> show a <> " | " <> name <> " : " <> show match <> " )"
+        OneOf a idx match -> "<" <> show a <> " | " <> show idx <> " : " <> show match <> " >"
+        Many a matches -> "[" <> show a <> " | " <> String.joinWith " , " (show <$> matches ) <> " ]"
+        Value a -> "{ " <> show a <> " }"
 
 
 {- TODO FIXME
@@ -80,23 +89,32 @@ convert node =
 
 
 extract :: AST String -> Grammar
-extract = AST.root >>> convert >>> flip bind load >>> fromMaybe Grammar.empty
+extract =
+    {- let
+        _ = Debug.spy "ast" $ show ast
+        _ = Debug.spy "convert" $ show $ convert $ AST.root ast
+    in ast # AST.root # convert # flip bind load # fromMaybe Grammar.empty -}
+    AST.root >>> convert >>> flip bind load >>> fromMaybe Grammar.empty
 
 
 load :: Match String -> Maybe Grammar
-load (Rule _ "main" mainMatch) =
-    case mainMatch of
-        Many _ ruleMatches ->
-            loadGrammar $ Array.catMaybes $ extractRuleDef <$> ruleMatches
-        _ -> Nothing
+load (Many _ ruleMatches) =
+    loadGrammar $ Array.catMaybes $ flip bind extractRuleDef <$> loadFirstChoice <$> ruleMatches
 
     where
+
+        loadFirstChoice :: Match String -> Maybe (Match String)
+        loadFirstChoice match =
+            case match of
+                OneOf _ 0 oomatch ->
+                    Just oomatch
+                _ -> Nothing
 
         loadGrammar :: Array { ruleName :: G.RuleName, rule :: Grammar.Rule } -> Maybe Grammar
         loadGrammar ruleDefs =
             let allRules = Map.fromFoldable $ (\{ ruleName, rule } -> ruleName /\ rule ) <$> ruleDefs
             in
-                Map.lookup "main" allRules <#> \mainRule -> Grammar mainRule allRules
+                Map.lookup "main" allRules <#> \mainRule -> Grammar mainRule $ Map.delete "main" allRules
 
         extractRuleDef :: Match String -> Maybe { ruleName :: G.RuleName, rule :: Grammar.Rule }
         extractRuleDef = case _ of

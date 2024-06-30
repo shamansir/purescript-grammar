@@ -71,7 +71,7 @@ comment =
 ruleDefn :: Rule
 ruleDefn =
     B.sequence
-        [ B.ref "indent"
+        [ B.ref "ident"
         , B.ref "ws"
         , B.text ":-"
         , B.ref "ws"
@@ -155,12 +155,12 @@ ruleName = B.ref "ident"
 text :: Rule
 text =
     B.sequence
-        [ B.text "\\\""
+        [ B.text "\""
         , B.repSep
             { rep : B.ref "stringChar"
             , sep : B.text ""
             }
-        , B.text "\\\""
+        , B.text "\""
         ]
 
 
@@ -245,10 +245,11 @@ ident =
 ws :: Rule
 ws =
     B.repSep
-        { rep : B.choice
-            [ B.text " "
-            , B.text "\\n"
-            ]
+        { rep :
+            B.choice
+                [ B.text " "
+                , B.text "\\n"
+                ]
         , sep : B.text ""
         }
 

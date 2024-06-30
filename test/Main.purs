@@ -889,10 +889,11 @@ parsesGrammarWithGrammar fileName = do
     grammarToParseStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar"
     -- expectationStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/sources/" <> fileName <> ".src.expected"
     let
+      targetStr = "main :- \"foo\"." -- grammarToParseStr
       buildAst :: AST String
-      buildAst = fillChunks grammarToParseStr $ WithGrammar.parse Self.grammar (const unit) grammarToParseStr
+      buildAst = fillChunks targetStr $ WithGrammar.parse Self.grammar (const unit) targetStr
     -- liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
-    (show $ Self.extract buildAst) `shouldEqual` ""
+    (show $ Self.extract buildAst) `shouldEqual` "main :- \"foo\".\n"
 
 
 

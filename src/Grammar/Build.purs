@@ -28,7 +28,7 @@ sequence = Sequence
 
 
 choice :: Array Rule -> Rule
-choice = Sequence
+choice = Choice
 
 
 ref :: RuleName -> Rule -- TODO: Symbol
