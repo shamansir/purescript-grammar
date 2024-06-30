@@ -79,10 +79,8 @@ convert node =
         AST.Fail _ _ -> Nothing
 
 
-{-
-extract :: forall a. AST a -> Grammar
-extract = AST.root >>> convert >>> map ?wh >>> fromMaybe Grammar.empty
--}
+extract :: AST String -> Grammar
+extract = AST.root >>> convert >>> flip bind load >>> fromMaybe Grammar.empty
 
 
 load :: Match String -> Maybe Grammar

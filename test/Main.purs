@@ -28,7 +28,8 @@ import Grammar (Grammar, Rule(..), WhichChar(..), CharX(..))
 import Grammar (toTree) as Grammar
 import Grammar.Parser (parser) as Grammar
 import Grammar.Self.Parser (grammar) as Self
-import Grammar.AST (AST(..), ASTNode, Range, Attempt(..), Expected(..), Found(..), Error(..), ruleOf)
+import Grammar.Self.Extract (extract) as Self
+import Grammar.AST (AST(..), ASTNode, Range, Attempt(..), Expected(..), Found(..), Error(..), ruleOf, fillChunks)
 import Grammar.AST.Parser (parse) as WithGrammar
 
 import Parsing (runParser, ParseError(..), Position(..)) as P
@@ -38,6 +39,7 @@ import StringParser (ParseError) as SP
 main :: Effect Unit
 main = launchAff_ $ runSpec [consoleReporter] do
   describe "purescript-grammar" do
+
     let
       grm = parsesGrammar
       grmfile = parsesGrammarFile
@@ -704,6 +706,11 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "should properly convert" $
         convertsGrammarToTree "main :- 'a'." "<root>\n|----> <main>\n       |----> <ch:a>\n"
 
+    describe "extract" $
+      it "should properly parse grammar and extract it from AST" $
+        parsesGrammarWithGrammar "grammar2"
+
+
 
 l_char :: Expected Char -> { at :: Int } -> ASTNode Int
 l_char (Expected ch) { at } = Tree.leaf { rule : Char $ Single $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
@@ -875,6 +882,18 @@ parsesWithGrammarFromFile fileName = do
       eAST = buildAst <$> lmap convertError eGrammar
     liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
     (show <$> eAST) `shouldEqual` (Right expectationStr)
+
+
+parsesGrammarWithGrammar :: ∀ (m ∷ Type -> Type). MonadEffect m => MonadThrow Ex.Error m => String -> m Unit
+parsesGrammarWithGrammar fileName = do
+    grammarToParseStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar"
+    -- expectationStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/sources/" <> fileName <> ".src.expected"
+    let
+      buildAst :: AST String
+      buildAst = fillChunks grammarToParseStr $ WithGrammar.parse Self.grammar (const unit) grammarToParseStr
+    -- liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
+    (show $ Self.extract buildAst) `shouldEqual` ""
+
 
 
 convertError :: P.ParseError -> SP.ParseError
