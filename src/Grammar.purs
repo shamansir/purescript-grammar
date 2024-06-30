@@ -98,7 +98,7 @@ toChar (Escaped ch) =
         'x' -> '\x'
         '\\' -> '\\'
         '"' -> '\"'
-        -- ''' -> '''
+        '\'' -> '\''
         other -> other
 
 
@@ -106,6 +106,17 @@ toRepr :: CharX -> String
 toRepr (Raw ch) = String.singleton ch
 toRepr (Escaped ch) =
     "\\" <> String.singleton ch
+
+
+fromChar :: Char -> CharX
+fromChar = case _ of
+    '\n' -> Escaped 'n'
+    '\t' -> Escaped 'n'
+    '\x' -> Escaped 'x'
+    '\\' -> Escaped '\\'
+    '\"' -> Escaped '"'
+    '\'' -> Escaped '''
+    ch -> Raw ch
 
 
 expands :: Rule -> Boolean
