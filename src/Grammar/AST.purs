@@ -7,12 +7,18 @@ import Data.FunctorWithIndex (mapWithIndex)
 import Data.String (joinWith) as String
 import Data.String.CodeUnits (singleton, slice) as String
 import Data.Newtype (class Newtype, unwrap, wrap)
+import Data.Array (catMaybes, find, index) as Array
+import Data.Tuple (snd) as Tuple
+import Data.Tuple.Nested ((/\))
 
 import Yoga.Tree.Extended (Tree)
-import Yoga.Tree.Extended (break, leaf, value) as Tree
+import Yoga.Tree.Extended (break, leaf, value, children) as Tree
 
 import Grammar (Rule(..), WhichChar(..), RuleName, CharX, CaptureName)
 import Grammar (expands, toRepr) as G
+
+import Grammar.AST.Point (Point)
+import Grammar.AST.Point (Point(..)) as P
 
 
 type Range = { start :: Int, end :: Int }
@@ -57,7 +63,7 @@ newtype Expected a
     = Expected a
 
 
-data At
+data At -- do we need it now? expose `locate` if we doe
     = Main
     | At RuleName
     | InSequence Int
@@ -252,6 +258,45 @@ match = _.result >>> case _ of
     Fail _ _ -> Nothing
 
 
+toPoint :: forall a. ASTNode a -> Maybe (Point a)
+toPoint node =
+    case _.result $ Tree.value node of
+        Match _ a ->
+            case _.rule $ Tree.value node  of
+                Sequence _ -> Just $ P.Many a $ Array.catMaybes $ (toPoint <$> Tree.children node)
+                Choice _ ->
+                    Tree.children node
+                        # mapWithIndex (/\)
+                        # Array.find (Tuple.snd >>> _isMatch)
+                        <#> map toPoint
+                        >>= \(n /\ mbMatch) -> mbMatch <#> P.OneOf a n
+                RepSep _ _ ->
+                    Just
+                        $ P.Many a
+                        $ Array.catMaybes
+                        $ mapWithIndex
+                            (\idx mbMatch -> if idx `mod` 2 == 1 then Nothing else mbMatch)
+                            (toPoint <$> Tree.children node)
+                Ref mbCapture ruleName ->
+                    Array.index (Tree.children node) 0
+                        >>= toPoint
+                        <#> P.Rule a (fromMaybe ruleName mbCapture)
+                Text _ -> Just $ P.Value a
+                Char _ -> Just $ P.Value a
+                Placeholder -> Nothing
+                None -> Nothing
+        Fail _ _ -> Nothing
+
+
+
+
+
+_isMatch :: forall a. ASTNode a -> Boolean
+_isMatch node = case _.result $ Tree.value node of
+    Match _ _ -> true
+    Fail _ _ -> false
+
+
 _fillChunks :: forall a. String -> ASTNode a -> ASTNode String
 _fillChunks from = map \x -> x { result = injectMatch x.result }
     where
@@ -259,6 +304,9 @@ _fillChunks from = map \x -> x { result = injectMatch x.result }
         injectMatch = case _ of
             Match rng _ -> Match rng $ String.slice rng.start rng.end from
             Fail pos error -> Fail pos error
+
+
+
 
 
 {-
