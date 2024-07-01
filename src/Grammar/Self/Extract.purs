@@ -99,18 +99,41 @@ extract =
     AST.root >>> convert >>> flip bind load >>> fromMaybe Grammar.empty
 
 
+_ifChosen :: forall a. Int -> Match a -> Maybe (Match a)
+_ifChosen n (OneOf _ idx oomatch) | idx == n  = Just oomatch
+_ifChosen _ _                     | otherwise = Nothing
+
+
+_ifRule :: forall a. String -> Match a -> Maybe (Match a)
+_ifRule name (Rule _ fname rmatch) | fname == name = Just rmatch
+_ifRule _    _                     | otherwise     = Nothing
+
+
+_valueIfRule :: forall a. String -> Match a -> Maybe a
+_valueIfRule name (Rule v fname _) | fname == name = Just v
+_valueIfRule _    _                | otherwise     = Nothing
+
+
+_take :: forall a. Int -> Match a -> Maybe (Match a)
+_take n (Many _ matches) = Array.index matches n
+_take _ _                = Nothing
+
+
+_matches :: forall a. Match a -> Maybe (Array (Match a))
+_matches (Many _ matches) = Just matches
+_matches _                = Nothing
+
+
+_matchChosen :: forall a b. (Int -> Match a -> Maybe b) -> Match a -> Maybe b
+_matchChosen f (OneOf a n oomatch) = f n oomatch
+_matchChosen _ _                   = Nothing
+
+
 load :: Match String -> Maybe Grammar
-load (Many _ ruleMatches) =
-    loadGrammar $ Array.catMaybes $ flip bind extractRuleDef <$> loadFirstChoice <$> ruleMatches
+load (Many _ ruleDefnMatches) =
+    loadGrammar $ Array.catMaybes $ flip bind extractRuleDef <$> _ifChosen 0 <$> ruleDefnMatches
 
     where
-
-        loadFirstChoice :: Match String -> Maybe (Match String)
-        loadFirstChoice match =
-            case match of
-                OneOf _ 0 oomatch ->
-                    Just oomatch
-                _ -> Nothing
 
         loadGrammar :: Array { ruleName :: G.RuleName, rule :: Grammar.Rule } -> Maybe Grammar
         loadGrammar ruleDefs =
@@ -119,170 +142,89 @@ load (Many _ ruleMatches) =
                 Map.lookup "main" allRules <#> \mainRule -> Grammar mainRule $ Map.delete "main" allRules
 
         extractRuleDef :: Match String -> Maybe { ruleName :: G.RuleName, rule :: Grammar.Rule }
-        extractRuleDef = case _ of
-            Rule _ "ruleDefn" match ->
-                case match of
-                    Many _ matches ->
-                        let
-                            ruleName =
-                                case Array.index matches 0 of
-                                    Just (Rule text "ident" _) -> text
-                                    _ -> ""
-                            mbRule =
-                                Array.index matches 4 >>= extractRule "rule"
-                        in
-                            mbRule <#> \rule -> { ruleName, rule }
-                    _ -> Nothing
-            _ -> Nothing
+        extractRuleDef match = do
+            ruleDefn <- _ifRule "ruleDefn" match
+            ruleName <- _take 0 ruleDefn >>= _valueIfRule "ident"
+            rule     <- _take 4 ruleDefn >>= extractRule "rule"
+            pure { ruleName, rule }
+
 
         extractRule :: String -> Match String -> Maybe Grammar.Rule
-        extractRule expectedName = case _ of
-            Rule _ rname rmatch ->
-                if rname == expectedName then
-                    case rmatch of
-                        OneOf _ 0 oomatch -> -- seq
-                            seq oomatch
-                        OneOf _ 1 oomatch -> -- choice
-                            choice oomatch
-                        OneOf _ 2 oomatch -> -- charRule
-                            charRule oomatch
-                        OneOf _ 3 oomatch -> -- text
-                            text oomatch
-                        OneOf _ 4 oomatch -> -- repSep
-                            repSep oomatch
-                        OneOf _ 5 oomatch -> -- placeholder
-                            case oomatch of
-                                Rule _ "placeholder" _ ->
-                                    Just G.Placeholder
-                                _ -> Nothing
-                        OneOf _ 6 oomatch -> -- ref
-                            ref oomatch
-                        _ -> Nothing
-                else Nothing
-            _ -> Nothing
+        extractRule expectedName match =
+            _ifRule expectedName match
+                >>= _matchChosen \n oomatch ->
+                case n of
+                    0 -> seq oomatch
+                    1 -> choice oomatch
+                    2 -> charRule' oomatch
+                    3 -> text oomatch
+                    4 -> repSep oomatch
+                    5 -> oomatch # _ifRule "placeholder" $> pure G.Placeholder
+                    6 -> ref oomatch
+                    _ -> Nothing
+
 
         ref :: Match String -> Maybe G.Rule
-        ref oomatch =
-            case oomatch of
-                Rule _ "ref" refMatch ->
-                    case refMatch of
-                        Many _ items ->
-                            let
-                                mbCaptureName =
-                                    case Array.index items 0 of
-                                        Just (OneOf _ 0 cnScMatch) ->
-                                            case cnScMatch of
-                                                Many _ submatches ->
-                                                    Array.index submatches 0 <#> collectText
-                                                _ -> Nothing
+        ref oomatch = do
+            refMatch <- _ifRule "ref" oomatch
+            let mbCaptureName = _take 0 refMatch >>= _ifChosen 0 >>= _take 0 <#> collectText
+            ruleName <- _take 1 refMatch <#> collectText
+            pure $ G.Ref mbCaptureName ruleName
 
-                                        _ -> Nothing
-                                mbRuleName = Array.index items 1 <#> collectText
-                            in
-                                G.Ref mbCaptureName <$> mbRuleName
-                        _ -> Nothing
-                _ -> Nothing
 
         repSep :: Match String -> Maybe G.Rule
-        repSep oomatch =
-            case oomatch of
-                Rule _ "repSep" repSepMatch ->
-                    case repSepMatch of
-                        Many _ sequence ->
-                            let
-                                mbRep =
-                                    Array.index sequence 2 >>= extractRule "rep"
-                                mbSep =
-                                    Array.index sequence 4 >>= extractRule "sep"
-                            in
-                                G.RepSep <$> mbRep <*> mbSep
-                        _ -> Nothing
-                _ -> Nothing
+        repSep oomatch = do
+            repSepMatch <- _ifRule "repSep" oomatch
+            rep <- _take 2 repSepMatch >>= extractRule "rep"
+            sep <- _take 4 repSepMatch >>= extractRule "sep"
+            pure $ G.RepSep rep sep
+
 
         seq :: Match String -> Maybe G.Rule
-        seq oomatch =
-            case oomatch of
-                Rule _ "seq" seqMatch ->
-                    case seqMatch of
-                        Many _ sequence ->
-                            case Array.index sequence 2 of
-                                Just (Many _ rules) ->
-                                    Just $ G.Sequence $ Array.catMaybes $ extractRule "rule" <$> rules
-                                _ -> Nothing
-                        _ -> Nothing
-                _ -> Nothing
+        seq oomatch = do
+            seqMatch <- _ifRule "seq" oomatch
+            ruleMatches <- _take 2 seqMatch >>= _matches
+            pure $ G.Sequence $ Array.catMaybes $ extractRule "rule" <$> ruleMatches
+
 
         choice :: Match String -> Maybe G.Rule
-        choice oomatch =
-            case oomatch of
-                Rule _ "choice" chMatch ->
-                    case chMatch of
-                        Many _ sequence ->
-                            case Array.index sequence 2 of
-                                Just (Many _ rules) ->
-                                    Just $ G.Choice $ Array.catMaybes $ extractRule "rule" <$> rules
-                                _ -> Nothing
-                        _ -> Nothing
-                _ -> Nothing
+        choice oomatch = do
+            chMatch <- _ifRule "choice" oomatch
+            ruleMatches <- _take 2 chMatch >>= _matches
+            pure $ G.Choice $ Array.catMaybes $ extractRule "rule" <$> ruleMatches
+
 
         text :: Match String -> Maybe G.Rule
-        text oomatch =
-            case oomatch of
-                Rule _ "text" tMatch ->
-                    case tMatch of
-                        Many _ sequence ->
-                            case Array.index sequence 1 of
-                                -- Just (Many chsText _) ->
-                                    -- Just $ G.Text chsText
-                                Just (Many _ strCharMatches) ->
-                                    Just $ G.Text $ collectContent strCharMatches
-                                _ -> Nothing
-                        _ -> Nothing
-                _ -> Nothing
+        text oomatch = do
+            tMatch <- _ifRule "text" oomatch
+            strCharMatches <- _take 1 tMatch >>= _matches
+            pure $ G.Text $ collectContent strCharMatches
 
-        charRule :: Match String -> Maybe G.Rule
-        charRule oomatch =
-            case oomatch of
-                Rule _ "charRule" chruleMatch ->
-                    case chruleMatch of
-                        OneOf _ 0 ioomatch -> -- char range
-                            case ioomatch of
-                                Rule _ "charRange" crmatch ->
-                                    case crmatch of
-                                        Many _ sequence ->
-                                            let
-                                                mbFromChar = Array.index sequence 1 <#> collectText >>= String.charAt 0 -- a.k.a "from"
-                                                mbToChar = Array.index sequence 3 <#> collectText >>= String.charAt 0  -- a.k.a "to"
-                                            in
-                                                G.Char <$> (G.Range <$> mbFromChar <*> mbToChar)
-                                        _ -> Nothing
-                                _ -> Nothing
-                        OneOf _ 1 ioomatch -> -- not char
-                            case ioomatch of
-                                Rule _ "notChar" ncmatch ->
-                                    case ncmatch of
-                                        Many _ sequence ->
-                                            let charV = Array.index sequence 1 <#> collectText <#> unescape -- FIXME: should be charRule here
-                                            in charV >>= String.charAt 1 <#> G.fromChar <#> G.Not <#> G.Char
-                                        _ -> Nothing
-                                _ -> Nothing
-                        OneOf _ 2 ioomatch -> -- single char
-                            case ioomatch of
-                                Rule _ "singleChar" scmatch ->
-                                    case scmatch of
-                                        Many _ sequence ->
-                                            let charV = Array.index sequence 1 <#> collectText
-                                            in charV >>= G.fromString <#> G.Single <#> G.Char
-                                        _ -> Nothing
-                                _ -> Nothing
-                        OneOf _ 3 ioomatch -> -- any char
-                            case ioomatch of
-                                Rule _ "anyChar" _ ->
-                                    Just $ G.Char G.Any
-                                _ -> Nothing
-                        _ -> Nothing
-                _ ->
-                    Nothing
+
+        charRule' :: Match String -> Maybe G.Rule
+        charRule' oomatch =
+            _ifRule "charRule" oomatch
+                >>= _matchChosen \n ioomatch ->
+                case n of
+                    0 -> do -- char range
+                        crMatch  <- _ifRule "charRange" ioomatch
+                        fromChar <- _take 1 crMatch <#> collectText >>= String.charAt 0
+                        toChar   <- _take 3 crMatch <#> collectText >>= String.charAt 0
+                        pure $ G.Char $ G.Range fromChar toChar
+                    1 -> do -- not char
+                        ncMatch  <- _ifRule "notChar" ioomatch
+                        charStr <- _take 1 ncMatch <#> collectText <#> unescape
+                        charx <- charStr # String.charAt 1 <#> G.fromChar
+                        pure $ G.Char $ G.Not charx
+                    2 -> do -- single char
+                        scMatch  <- _ifRule "singleChar" ioomatch
+                        charStr <- _take 1 scMatch <#> collectText
+                        charx <- charStr # G.fromString
+                        pure $ G.Char $ G.Single charx
+                    3 -> do
+                        _ <- _ifRule "anyChar" ioomatch
+                        pure $ G.Char G.Any
+                    _ -> Nothing
 
 
         collectText :: Match String -> String
@@ -298,7 +240,11 @@ load (Many _ ruleMatches) =
         unescape :: String -> String
         unescape = String.toCharArray >>> Array.foldl foldPairs ([] /\ false) >>> Tuple.fst >>> String.fromCharArray
 
-        -- FIXME: may be it is faster to do it in JavaScript
+        -- FIXME: it is still unclear why we need to unescape:
+        --          yes, the `text` (and so `stringChar`) rule collects chars '\\' and everything after as separate characters
+        --          so when we combine them using fold/monoid, we get double-escaping, but may be we could fix it somehow
+        --          if we do it properly;
+        -- FIXME: may be it is faster to do it in JavaScript or there's some utility function in String.Extra or somewhere
         foldPairs :: Array Char  /\ Boolean -> Char -> Array Char /\ Boolean
         foldPairs (arr /\ false) '\\' = arr /\ true
         foldPairs (arr /\ true)  '\\' = Array.snoc arr '\\' /\ false
