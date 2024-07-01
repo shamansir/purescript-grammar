@@ -5,8 +5,8 @@ import Prelude
 import Data.Maybe (Maybe(..))
 import Data.Map (Map)
 import Data.Map (empty, lookup, toUnfoldable) as Map
-import Data.String (joinWith) as String
-import Data.String.CodeUnits (singleton) as String
+import Data.String (joinWith, length) as String
+import Data.String.CodeUnits (singleton, charAt) as String
 import Data.Tuple (uncurry) as Tuple
 import Data.Array ((:))
 import Data.Array (singleton) as Array
@@ -97,7 +97,7 @@ toChar (Escaped ch) =
         't' -> '\t'
         'x' -> '\x'
         '\\' -> '\\'
-        '"' -> '\"'
+        -- '"' -> '\"'
         '\'' -> '\''
         other -> other
 
@@ -111,12 +111,32 @@ toRepr (Escaped ch) =
 fromChar :: Char -> CharX
 fromChar = case _ of
     '\n' -> Escaped 'n'
-    '\t' -> Escaped 'n'
+    '\r' -> Escaped 'r'
+    '\t' -> Escaped 't'
     '\x' -> Escaped 'x'
     '\\' -> Escaped '\\'
-    '\"' -> Escaped '"'
+    -- '\"' -> Escaped '"'
     '\'' -> Escaped '''
     ch -> Raw ch
+
+
+fromString :: String -> Maybe CharX
+fromString str =
+    let
+        mbFirstChar = String.charAt 0 str
+        mbSecondChar = String.charAt 1 str
+    in
+        case mbFirstChar of
+            Just '\\' ->
+                if String.length str > 2
+                    then Nothing
+                    else Escaped <$> mbSecondChar
+            Just ch ->
+                if String.length str > 1
+                    then Nothing
+                    else Just $ Raw ch
+            Nothing -> Nothing
+
 
 
 expands :: Rule -> Boolean

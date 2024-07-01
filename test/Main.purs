@@ -687,6 +687,8 @@ main = launchAff_ $ runSpec [consoleReporter] do
           withgrmfile "fp"
         pending' "parses `grammar`" $
           withgrmfile "grammar"
+        it "parses `grammar2`" $
+          withgrmfile "grammar2"
         it "parses `json`" $
           withgrmfile "json"
         pending' "parses `modelica`" $
@@ -712,6 +714,13 @@ main = launchAff_ $ runSpec [consoleReporter] do
           parsesGivenGrammarWithGrammar "main :- \"foo\"." "main :- \"foo\".\n"
         it "parses simple parser with characters" $ do
           parsesGivenGrammarWithGrammar "main :- 'f'." "main :- 'f'.\n"
+        it "parses simple parser with escaped characters" $ do
+          parsesGivenGrammarWithGrammar
+              """main :- ['"','\n','\\',"\n","\t",'\\']."""
+              """main :- ['"','\n','\\',"\n","\t",'\\'].
+              """
+        it "parses simple parser with escaped characters 2" $ do
+          parsesGivenGrammarWithGrammar """main :- ('"'|'\n'|"\n"|"\t"|"\\"|'\\').""" "main :- \"foo\".\n"
         it "parses simple parser with any char" $ do
           parsesGivenGrammarWithGrammar "main :- .." "main :- ..\n"
         it "parses simple parser with char range" $ do
@@ -738,8 +747,34 @@ main = launchAff_ $ runSpec [consoleReporter] do
           parsesGivenGrammarWithGrammar "main :- foo.\nfoo :- \"foo\"." "main :- foo.\nfoo :- \"foo\"."
         it "parses simple parser with capture-ref to other rule" $ do
           parsesGivenGrammarWithGrammar "main :- as:foo.\nfoo :- \"foo\"." "main :- as:foo.\nfoo :- \"foo\"."
+
+      describe "grammars from files" $ do
+        it "parses `blocks`" $ do
+          parsesGrammarWithGrammar "blocks"
+        it "parses `contracts`" $ do
+          parsesGrammarWithGrammar "contracts"
+        it "parses `datalog`" $ do
+          parsesGrammarWithGrammar "datalog"
+        it "parses `datalog2`" $ do
+          parsesGrammarWithGrammar "datalog2"
+        it "parses `fp`" $ do
+          parsesGrammarWithGrammar "fp"
+        it "parses `grammar`" $ do
+          parsesGrammarWithGrammar "grammar"
         it "parses `grammar2`" $ do
           parsesGrammarWithGrammar "grammar2"
+        it "parses `json`" $ do
+          parsesGrammarWithGrammar "json"
+        it "parses `modelica`" $ do
+          parsesGrammarWithGrammar "modelica"
+        it "parses `opt`" $ do
+          parsesGrammarWithGrammar "opt"
+        it "parses `plainText`" $ do
+          parsesGrammarWithGrammar "plainText"
+        it "parses `sql`" $ do
+          parsesGrammarWithGrammar "sql"
+        it "parses `treeSql`" $ do
+          parsesGrammarWithGrammar "treeSql"
 
 
 l_char :: Expected Char -> { at :: Int } -> ASTNode Int
@@ -932,7 +967,7 @@ parsesGrammarWithGrammar fileName = do
       buildAst = fillChunks grammarToParseStr $ WithGrammar.parse Self.grammar (const unit) grammarToParseStr
       grammar :: Grammar
       grammar = Self.extract buildAst
-    liftEffect $ writeTextFile Encoding.UTF8 ("./test/grammars/" <> fileName <> ".grammar.result") $ show grammar
+    liftEffect $ writeTextFile Encoding.UTF8 ("./test/grammars/" <> fileName <> ".grammar.result2") $ show grammar
     (show grammar) `shouldEqual` expectationStr
 
 
