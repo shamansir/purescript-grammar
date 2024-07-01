@@ -3,14 +3,14 @@ module Grammar.Self.Extract where
 import Prelude
 
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Array (index, catMaybes, find, mapWithIndex) as Array
+import Data.Array (index, catMaybes, find, mapWithIndex, foldr, foldl, snoc) as Array
 import Data.Tuple (fst, snd) as Tuple
-import Data.Tuple.Nested ((/\))
+import Data.Tuple.Nested ((/\), type (/\))
 import Data.FunctorWithIndex (mapWithIndex)
 import Data.Map (fromFoldable, lookup, delete) as Map
 import Data.Foldable (fold)
 import Data.String (joinWith) as String
-import Data.String.CodeUnits (charAt) as String
+import Data.String.CodeUnits (charAt, toCharArray, fromCharArray) as String
 
 import Grammar (Grammar(..))
 import Grammar (Rule, empty) as Grammar
@@ -262,7 +262,7 @@ load (Many _ ruleMatches) =
                                 Rule _ "notChar" ncmatch ->
                                     case ncmatch of
                                         Many _ sequence ->
-                                            let charV = Array.index sequence 1 <#> collectText -- FIXME: should be charRule here
+                                            let charV = Array.index sequence 1 <#> collectText <#> unescape -- FIXME: should be charRule here
                                             in charV >>= String.charAt 1 <#> G.fromChar <#> G.Not <#> G.Char
                                         _ -> Nothing
                                 _ -> Nothing
@@ -293,8 +293,27 @@ load (Many _ ruleMatches) =
             Value chunk -> chunk
 
         collectContent :: Array (Match String) -> String
-        collectContent = fold <<< map collectText
+        collectContent = unescape <<< fold <<< map collectText
 
+        unescape :: String -> String
+        unescape = String.toCharArray >>> Array.foldl foldPairs ([] /\ false) >>> Tuple.fst >>> String.fromCharArray
+
+        -- FIXME: may be it is faster to do it in JavaScript
+        foldPairs :: Array Char  /\ Boolean -> Char -> Array Char /\ Boolean
+        foldPairs (arr /\ false) '\\' = arr /\ true
+        foldPairs (arr /\ true)  '\\' = Array.snoc arr '\\' /\ false
+        foldPairs (arr /\ true)  ch   = (Array.snoc arr $ escaped ch) /\ false
+        foldPairs (arr /\ false) ch   = Array.snoc arr ch /\ false
+
+        escaped :: Char -> Char
+        escaped = case _ of
+            'n' -> '\n'
+            'r' -> '\r'
+            't' -> '\t'
+            '\\' -> '\\'
+            'x' -> '\x'
+            '\'' -> '\''
+            ch -> ch
 
 load _ = Nothing
 

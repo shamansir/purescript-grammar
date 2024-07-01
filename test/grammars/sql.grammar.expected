@@ -1,0 +1,25 @@
+main :- repSep(statementSemicolon,ws).
+alpha :- ([a-z]|[A-Z]|"_").
+alphaNum :- (alpha|num).
+colSpec :- [columnName,ws,type,ws,(refClause|"")].
+columnName :- (ident|placeholder).
+commaWS :- [",",ws].
+createKW :- "CREATE".
+createTableStmt :- [createKW,ws,tableKW,ws,tableName,ws,"(",ws,repSep(colSpec,commaWS),ws,")"].
+fromKW :- "FROM".
+ident :- [alpha,repSep((alphaNum|"."),"")].
+num :- [0-9].
+placeholder :- "???".
+refClause :- [refKW,ws,tableName,ws,"(",columnName,")"].
+refKW :- "REFERENCES".
+selectKW :- "SELECT".
+selectStmt :- [selectKW,ws,selection,ws,fromKW,ws,tableName].
+selection :- repSep(columnName,commaWS).
+statement :- (selectStmt|createTableStmt).
+statementSemicolon :- [statement,";"].
+string :- ["\"",repSep(stringChar,""),"\""].
+stringChar :- (^'"'|['\\','"']).
+tableKW :- "TABLE".
+tableName :- (ident|placeholder).
+type :- ("INT"|"TEXT").
+ws :- repSep((" "|"\n"),"").

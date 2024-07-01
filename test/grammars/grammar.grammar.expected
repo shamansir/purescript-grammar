@@ -1,0 +1,26 @@
+main :- repSep((ruleDefn|comment),ws).
+alpha :- ([a-z]|[A-Z]).
+alphaNum :- (alpha|num).
+anyChar :- ".".
+captureName :- ident.
+charRange :- ["[",from:alphaNum,"-",to:alphaNum,"]"].
+charRule :- (charRange|notChar|singleChar|anyChar).
+choice :- ["(",ws,repSep(rule,[ws,"|",ws]),ws,")"].
+commaSpace :- [",",ws].
+comment :- ["#",repSep(commentChar,"")].
+commentChar :- ^'\n'.
+ident :- repSep(alpha,"").
+notChar :- ['^',charRule].
+num :- [0-9].
+placeholder :- "???".
+ref :- [([captureName,":"]|""),ruleName].
+repSep :- [repSepKW,"(",rep:rule,commaSpace,sep:rule,")"].
+repSepKW :- "repSep".
+rule :- (seq|choice|ref|text|charRule|repSep|placeholder).
+ruleDefn :- [ident,ws,":-",ws,rule,"."].
+ruleName :- ident.
+seq :- ["[",ws,repSep(rule,[ws,",",ws]),ws,"]"].
+singleChar :- ["'",(['\\','n']|['\\','\\']|.),"'"].
+stringChar :- (^'"'|['\\','"']).
+text :- ["\"",repSep(stringChar,""),"\""].
+ws :- repSep((" "|"\n"),"").

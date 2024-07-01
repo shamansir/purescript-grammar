@@ -8,7 +8,7 @@ charRule :- (charRange|notChar|singleChar|anyChar).
 choice :- ["(",ws,repSep(rule,[ws,"|",ws]),ws,")"].
 commaSpace :- [",",ws].
 comment :- ["#",repSep(commentChar,"")].
-commentChar :- ^'\\'.
+commentChar :- ^'\n'.
 ident :- repSep(alpha,"").
 notChar :- ['^',charRule].
 num :- [0-9].
@@ -21,6 +21,6 @@ ruleDefn :- [ident,ws,":-",ws,rule,"."].
 ruleName :- ident.
 seq :- ["[",ws,repSep(rule,[ws,",",ws]),ws,"]"].
 singleChar :- ["'",(['\\','n']|['\\','\\']|.),"'"].
-stringChar :- (['\\','\"']|^'\"').
-text :- ["\\\"",repSep(stringChar,""),"\\\""].
-ws :- repSep((" "|"\\n"),"").
+stringChar :- (['\\','"']|^'"').
+text :- ["\"",repSep(stringChar,""),"\""].
+ws :- repSep((" "|"\n"),"").
