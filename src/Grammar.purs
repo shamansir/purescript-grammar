@@ -34,8 +34,8 @@ data Rule
 
 data WhichChar
     = Range Char Char
-    | Not CharX
-    | Single CharX
+    | Not Char
+    | Single Char
     | Any
 
 
@@ -43,11 +43,6 @@ type RuleName = String
 
 
 type CaptureName = String
-
-
-data CharX
-    = Escaped Char
-    | Raw Char
 
 
 data RuleKnot
@@ -86,57 +81,6 @@ set (Grammar _ s) = s
 
 findIn :: RuleSet -> RuleName -> Maybe Rule
 findIn = flip Map.lookup
-
-
-toChar :: CharX -> Char
-toChar (Raw ch) = ch
-toChar (Escaped ch) =
-    case ch of
-        'n' -> '\n'
-        'r' -> '\r'
-        't' -> '\t'
-        'x' -> '\x'
-        '\\' -> '\\'
-        -- '"' -> '\"'
-        '\'' -> '\''
-        other -> other
-
-
-toRepr :: CharX -> String
-toRepr (Raw ch) = String.singleton ch
-toRepr (Escaped ch) =
-    "\\" <> String.singleton ch
-
-
-fromChar :: Char -> CharX
-fromChar = case _ of
-    '\n' -> Escaped 'n'
-    '\r' -> Escaped 'r'
-    '\t' -> Escaped 't'
-    '\x' -> Escaped 'x'
-    '\\' -> Escaped '\\'
-    -- '\"' -> Escaped '"'
-    '\'' -> Escaped '''
-    ch -> Raw ch
-
-
-fromString :: String -> Maybe CharX
-fromString str =
-    let
-        mbFirstChar = String.charAt 0 str
-        mbSecondChar = String.charAt 1 str
-    in
-        case mbFirstChar of
-            Just '\\' ->
-                if String.length str > 2
-                    then Nothing
-                    else Escaped <$> mbSecondChar
-            Just ch ->
-                if String.length str > 1
-                    then Nothing
-                    else Just $ Raw ch
-            Nothing -> Nothing
-
 
 
 expands :: Rule -> Boolean
@@ -197,9 +141,7 @@ instance Show WhichChar where
         Range chA chB -> "[" <> String.singleton chA <> "-" <> String.singleton chB <> "]"
         Not char -> "^" <> show (Single char)
         Single char ->
-            "'" <> (case char of
-                        Escaped ch -> "\\" <> String.singleton ch
-                        Raw ch -> String.singleton ch) <> "'"
+            "'" <> String.singleton char <> "'"
         Any -> "."
 
 
@@ -240,8 +182,8 @@ instance Show RuleKnot where
             case which of
                 Any -> "any"
                 Range from to -> "[" <> String.singleton from <> "-" <> String.singleton to <> "]"
-                Not chx -> "^" <> String.singleton (toChar chx)
-                Single chx -> String.singleton (toChar chx)
+                Not chx -> "^" <> String.singleton chx
+                Single chx -> String.singleton chx
             <> ">"
         KPlaceholder -> "<placeholder>"
         KNone -> "<?>"

@@ -14,7 +14,7 @@ import Data.String.CodeUnits (charAt) as String
 
 import Grammar (Grammar(..))
 import Grammar (Rule, empty) as Grammar
-import Grammar (Rule(..), RuleName, WhichChar(..), fromChar, fromString) as G
+import Grammar (Rule(..), RuleName, WhichChar(..)) as G
 import Grammar.AST (AST(..), At, ASTNode)
 import Grammar.AST (root, Cell, Attempt(..), Range) as AST
 
@@ -263,7 +263,7 @@ load (Many _ ruleMatches) =
                                     case ncmatch of
                                         Many _ sequence ->
                                             let charV = Array.index sequence 1 <#> collectText -- FIXME: should be charRule here
-                                            in charV >>= String.charAt 1 <#> G.fromChar <#> G.Not <#> G.Char
+                                            in charV >>= String.charAt 1 <#> G.Not <#> G.Char
                                         _ -> Nothing
                                 _ -> Nothing
                         OneOf _ 2 ioomatch -> -- single char
@@ -272,7 +272,7 @@ load (Many _ ruleMatches) =
                                     case scmatch of
                                         Many _ sequence ->
                                             let charV = Array.index sequence 1 <#> collectText
-                                            in charV >>= G.fromString <#> G.Single <#> G.Char
+                                            in charV >>= String.charAt 0 <#> G.Single <#> G.Char
                                         _ -> Nothing
                                 _ -> Nothing
                         OneOf _ 3 ioomatch -> -- any char

@@ -11,8 +11,8 @@ import Data.Newtype (class Newtype, unwrap, wrap)
 import Yoga.Tree.Extended (Tree)
 import Yoga.Tree.Extended (break, leaf, value) as Tree
 
-import Grammar (Rule(..), WhichChar(..), RuleName, CharX, CaptureName)
-import Grammar (expands, toRepr) as G
+import Grammar (Rule(..), WhichChar(..), RuleName, CaptureName)
+import Grammar (expands) as G
 
 
 type Range = { start :: Int, end :: Int }
@@ -69,8 +69,8 @@ data At
 
 data Error
     = TextError { expected :: Expected String, found :: Found String }
-    | CharacterError { expected :: Expected CharX, found :: Found Char }
-    | NegCharacterError { notExpected :: Expected CharX, found :: Found Char }
+    | CharacterError { expected :: Expected Char, found :: Found Char }
+    | NegCharacterError { notExpected :: Expected Char, found :: Found Char }
     | CharacterRangeError { from :: Expected Char, to :: Expected Char, found :: Found Char }
     | AnyCharacterError { found :: Found Char }
     | RuleNotFoundError { name :: RuleName, capture :: Maybe CaptureName }
@@ -185,11 +185,6 @@ instance Show (Found String) where
 instance Show (Expected Char) where
     show = case _ of
         Expected ch -> "'" <> String.singleton ch <> "'"
-
-
-instance Show (Expected CharX) where
-    show = case _ of
-        Expected chx -> "'" <> G.toRepr chx <> "'"
 
 
 instance Show (Expected String) where

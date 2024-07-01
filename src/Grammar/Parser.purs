@@ -13,7 +13,7 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Map as Map
 import Control.Lazy (defer)
 
-import Grammar (Grammar, CharX(..), toChar)
+import Grammar (Grammar)
 import Grammar as Grammar
 
 import Parsing (Parser)
@@ -208,7 +208,7 @@ _ident =
     <$> (PA.many1 P.alphaNum <?> "expected identifier")
 
 
-_char :: P CharX
+_char :: P Char
 _char =
     P.between
         (P.char '\'')
@@ -216,25 +216,27 @@ _char =
         (_textChar ''' '\\')
 
 
-_loadChar :: CharX -> Char
-_loadChar = case _ of
-    Escaped ch -> ch
-    Raw ch -> ch
+_buildString :: Array Char -> String
+_buildString = String.fromCharArray
 
 
-_buildString :: Array CharX -> String
-_buildString = map toChar >>> String.fromCharArray
-
-
-_textChar :: Char -> Char -> P CharX
+_textChar :: Char -> Char -> P Char
 _textChar terminate escape = do
     x <- P.lookAhead P.anyChar
     if x == terminate then
         P.fail $ "found " <> show x
     else if x == escape then
-        P.anyChar *> P.anyChar <#> Escaped
+        P.anyChar *> P.anyChar <#> toEscaped
     else
-        P.anyChar <#> Raw
+        P.anyChar
+    where
+        toEscaped = case _ of
+            'n' -> '\n'
+            't' -> '\t'
+            '\'' -> '\''
+            'x' -> '\x'
+            '\\' -> '\\'
+            ch -> ch
 
 
 _notBut :: forall a x. Show x => P x -> P a -> P a

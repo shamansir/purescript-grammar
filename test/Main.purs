@@ -24,7 +24,7 @@ import Yoga.Tree (showTree)
 import Yoga.Tree.Extended (Tree(..))
 import Yoga.Tree.Extended (node, leaf) as Tree
 
-import Grammar (Grammar, Rule(..), WhichChar(..), CharX(..))
+import Grammar (Grammar, Rule(..), WhichChar(..))
 import Grammar (toTree) as Grammar
 import Grammar.Parser (parser) as Grammar
 import Grammar.Self.Parser (grammar) as Self
@@ -778,11 +778,11 @@ main = launchAff_ $ runSpec [consoleReporter] do
 
 
 l_char :: Expected Char -> { at :: Int } -> ASTNode Int
-l_char (Expected ch) { at } = Tree.leaf { rule : Char $ Single $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
+l_char (Expected ch) { at } = Tree.leaf { rule : Char $ Single ch, result : Match { start : at, end : at + 1 } 0 }
 
 
 l_neg_char :: Expected Char -> { at :: Int } -> ASTNode Int
-l_neg_char (Expected ch) { at } = Tree.leaf { rule : Char $ Not $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
+l_neg_char (Expected ch) { at } = Tree.leaf { rule : Char $ Not ch, result : Match { start : at, end : at + 1 } 0 }
 
 
 l_char_rng :: { from :: Char, to :: Char } -> { at :: Int } -> ASTNode Int
@@ -799,12 +799,12 @@ l_text (Expected text) range = Tree.leaf { rule : Text text, result : Match rang
 
 l_char_err :: Expected Char -> Found Char -> { pos :: Int } -> ASTNode Int
 l_char_err (Expected ch) found { pos } =
-  Tree.leaf { rule : Char $ Single $ Raw ch, result : Fail pos $ CharacterError { expected : Expected $ Raw ch, found : found }  }
+  Tree.leaf { rule : Char $ Single ch, result : Fail pos $ CharacterError { expected : Expected ch, found : found }  }
 
 
 l_neg_char_err :: Expected Char -> { pos :: Int } -> ASTNode Int
 l_neg_char_err (Expected ch) { pos } =
-  Tree.leaf { rule : Char $ Not $ Raw ch, result : Fail pos $ NegCharacterError { notExpected : Expected $ Raw ch, found : Found ch }  }
+  Tree.leaf { rule : Char $ Not ch, result : Fail pos $ NegCharacterError { notExpected : Expected ch, found : Found ch }  }
 
 
 l_char_rng_err :: { from :: Char, to :: Char } -> Found Char -> { pos :: Int } -> ASTNode Int

@@ -216,12 +216,12 @@ singleChar =
         [ B.text "'"
         , B.choice
             [ B.sequence
-                [ B.char' $ B.escape '\\'
+                [ B.char '\\'
                 , B.char 'n'
                 ]
             , B.sequence
-                [ B.char' $ B.escape '\\'
-                , B.char' $ B.escape '\\'
+                [ B.char '\\'
+                , B.char '\\'
                 ]
             , B.anyChar
             ]
@@ -292,7 +292,7 @@ stringChar :: Rule
 stringChar =
     B.choice
         [ B.sequence
-            [ B.char' $ B.escape '\\'
+            [ B.char '\\'
             , B.char '"'
             ]
         , B.notChar '"'
@@ -301,4 +301,4 @@ stringChar =
 
 commentChar :: Rule
 commentChar =
-    B.notChar' $ B.escape 'n'
+    B.notChar '\n'

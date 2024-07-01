@@ -11,8 +11,8 @@ import Data.Array (uncons, snoc, singleton) as Array
 import Data.Tuple.Nested ((/\))
 
 import Yoga.Tree.Extended (leaf, node, value) as Tree
-import Grammar (Grammar, Rule(..), RuleSet, WhichChar(..), CharX, CaptureName, RuleName)
-import Grammar (set, main, toChar) as G
+import Grammar (Grammar, Rule(..), RuleSet, WhichChar(..), CaptureName, RuleName)
+import Grammar (set, main) as G
 import Grammar.AST (AST(..), ASTNode, Attempt(..), At(..), Error(..), Found(..))
 import Grammar.AST (found, expected, eoi) as G
 
@@ -86,10 +86,10 @@ _text expected =
     }
 
 
-_char :: CharX -> LeafParser String
+_char :: Char -> LeafParser String
 _char expected = _ch_convert $ case _ of
     Found char ->
-        if char == G.toChar expected
+        if char == expected
             then Proceed
         else Stop $ CharacterError { expected : G.expected expected, found : G.found char }
     EOI ->
@@ -105,11 +105,11 @@ _anyChar =
             Stop $ AnyCharacterError { found : G.eoi }
 
 
-_negChar :: CharX -> LeafParser String
+_negChar :: Char -> LeafParser String
 _negChar notExpected =
     _ch_convert $ case _ of
         Found char ->
-            if char == G.toChar notExpected
+            if char == notExpected
                 then Stop $ NegCharacterError { notExpected : G.expected notExpected, found : G.found char }
             else Proceed
         EOI ->

@@ -10,7 +10,7 @@ import Data.Tuple.Nested (type (/\))
 
 -- import Record.Extra
 
-import Grammar (Grammar(..), Rule(..), WhichChar(..), RuleName, CaptureName, CharX(..))
+import Grammar (Grammar(..), Rule(..), WhichChar(..), RuleName, CaptureName)
 
 
 
@@ -52,23 +52,11 @@ anyChar = Char Any
 
 
 char :: Char -> Rule
-char = Char <<< Single <<< Raw
-
-
-char' :: CharX -> Rule
-char' = Char <<< Single
+char = Char <<< Single
 
 
 notChar :: Char -> Rule
-notChar = Char <<< Not <<< Raw
-
-
-escape :: Char -> CharX
-escape = Escaped
-
-
-notChar' :: CharX -> Rule
-notChar' = Char <<< Not
+notChar = Char <<< Not
 
 
 range :: { from :: Char, to :: Char } -> Rule
