@@ -248,7 +248,7 @@ ws =
         { rep :
             B.choice
                 [ B.text " "
-                , B.text "\\n"
+                , B.text "\n"
                 ]
         , sep : B.text ""
         }

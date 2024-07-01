@@ -169,7 +169,7 @@ load (Many _ ruleMatches) =
                         Many _ items ->
                             let
                                 mbCaptureName =
-                                    case Array.index items 1 of
+                                    case Array.index items 0 of
                                         Just (OneOf _ 0 cnScMatch) ->
                                             case cnScMatch of
                                                 Many _ submatches ->
