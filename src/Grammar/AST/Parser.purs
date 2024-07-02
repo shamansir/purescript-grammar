@@ -42,8 +42,12 @@ runParser p str =
 
 
 runParserWith :: forall a. P a -> State -> AST a
-runParserWith p =
-    AST <<< _.node <<< step p
+runParserWith p state =
+    -- AST <<< _.node <<< step p
+    AST
+        { source : state.next
+        , tree : _.node $ step p state
+        }
 
 
 step :: forall a. P a -> State -> Step a Unit

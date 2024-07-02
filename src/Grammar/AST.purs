@@ -9,7 +9,7 @@ import Data.String.CodeUnits (singleton, slice) as String
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Array (catMaybes, find, index) as Array
 import Data.Tuple (snd) as Tuple
-import Data.Tuple.Nested ((/\))
+import Data.Tuple.Nested ((/\), type (/\))
 
 import Yoga.Tree.Extended (Tree)
 import Yoga.Tree.Extended (break, leaf, value, children) as Tree
@@ -44,7 +44,7 @@ type ASTNode a =
 
 
 newtype AST a =
-    AST (ASTNode a)
+    AST { source :: String, tree :: ASTNode a }
 
 
 derive instance Newtype (AST a) _
@@ -93,7 +93,7 @@ data Error
 
 
 instance Show a => Show (AST a) where
-    show = showTree Main <<< unwrap
+    show = showTree Main <<< _.tree <<< unwrap
         where
 
         showTree :: At -> ASTNode a -> String
@@ -215,7 +215,7 @@ instance Show At where
 
 
 empty :: forall a. AST a
-empty = AST $ Tree.leaf { rule : None, result : Fail 0 Unknown }
+empty = AST { source : "", tree : Tree.leaf { rule : None, result : Fail 0 Unknown } }
 
 
 found :: forall a. a -> Found a
@@ -231,20 +231,24 @@ eoi = EOI
 
 
 root :: forall a. AST a -> ASTNode a
-root = unwrap
+root = unwrap >>> _.tree
 
 
 ruleOf :: forall a. ASTNode a -> Rule
 ruleOf = Tree.value >>> _.rule
 
 
-fillChunks :: forall a. String -> AST a -> AST String
-fillChunks from = unwrap >>> _fillChunks from >>> wrap
+fillChunks :: forall a. AST a -> AST String
+fillChunks = _over _fillChunks
 
 
 rebuild :: forall a b. (Cell a -> Cell b) -> AST a -> AST b
 rebuild f =
-    unwrap >>> map f >>> wrap
+    _over $ const $ map f
+
+
+_over :: forall a b. (String -> ASTNode a -> ASTNode b) -> AST a -> AST b
+_over f = unwrap >>> (\{ source, tree } -> { source, tree : f source tree }) >>> wrap
 
 
 mapBy :: forall a b. (Cell a -> b) -> AST a -> AST b

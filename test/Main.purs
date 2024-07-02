@@ -149,57 +149,57 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm
           "?"
           """main :- "foo"."""
-          $ AST $ l_text_err (Expected "foo") (Found "?") { pos : 0 }
+          $ l_text_err (Expected "foo") (Found "?") { pos : 0 }
       it "parsing strings" $
         withgrm
           "foo"
           """main :- "foo"."""
-          $ AST $ l_text (Expected "foo") { start : 0, end : 3 }
+          $ l_text (Expected "foo") { start : 0, end : 3 }
       it "parsing strings at end-of-input" $
         withgrm
           ""
           """main :- "foo"."""
-          $ AST $ l_text_err (Expected "foo") EOI { pos : 0 }
+          $ l_text_err (Expected "foo") EOI { pos : 0 }
       it "parsing strings fails 2" $
         withgrm
           "foa"
           """main :- "foo"."""
-          $ AST $ l_text_err (Expected "foo") (Found "foa") { pos : 0 }
+          $ l_text_err (Expected "foo") (Found "foa") { pos : 0 }
       it "parsing chars" $
         withgrm
           "f"
           "main :- 'f'."
-          $ AST $ l_char (Expected 'f') { at : 0 }
+          $ l_char (Expected 'f') { at : 0 }
       it "parsing chars fails" $
         withgrm
           "g"
           "main :- 'f'."
-          $ AST $ l_char_err (Expected 'f') (Found 'g') { pos : 0 }
+          $ l_char_err (Expected 'f') (Found 'g') { pos : 0 }
       it "parsing negated chars" $
         withgrm
           "o"
           "main :- ^'f'."
-          $ AST $ l_neg_char (Expected 'f') { at : 0 }
+          $ l_neg_char (Expected 'f') { at : 0 }
       it "parsing negated chars fails" $
         withgrm
           "f"
           "main :- ^'f'."
-          $ AST $ l_neg_char_err (Expected 'f') { pos : 0 }
+          $ l_neg_char_err (Expected 'f') { pos : 0 }
       it "parsing char ranges" $
         withgrm
           "f"
           "main :- [c-g]."
-          $ AST $ l_char_rng { from : 'c', to : 'g' } { at : 0 } -- FIXME: passed rule info is not shown so with any from/to this test passes
+          $ l_char_rng { from : 'c', to : 'g' } { at : 0 } -- FIXME: passed rule info is not shown so with any from/to this test passes
       it "parsing char ranges fails" $
         withgrm
           "a"
           "main :- [c-g]."
-          $ AST $ l_char_rng_err { from : 'c', to : 'g' } (Found 'a') { pos : 0 }
+          $ l_char_rng_err { from : 'c', to : 'g' } (Found 'a') { pos : 0 }
       it "parsing char sequences" $
         withgrm
           "foo"
           "main :- ['f','o','o']."
-          $ AST $ n_seq { start : 0, end : 3 }
+          $ n_seq { start : 0, end : 3 }
             [ l_char (Expected 'f') { at : 0 }
             , l_char (Expected 'o') { at : 1 }
             , l_char (Expected 'o') { at : 2 }
@@ -208,7 +208,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm
           "fxo"
           "main :- ['f','o','o']."
-          $ AST $ n_seq_err { pos : 1, entry : 1 }
+          $ n_seq_err { pos : 1, entry : 1 }
             [ l_char (Expected 'f') { at : 0 }
             , l_char_err (Expected 'o') (Found 'x') { pos : 1 }
             ]
@@ -216,7 +216,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm
           "foo"
           "main :- [.,.,.]."
-          $ AST $ n_seq { start : 0, end : 3 }
+          $ n_seq { start : 0, end : 3 }
             [ l_char_any { at : 0 }
             , l_char_any { at : 1 }
             , l_char_any { at : 2 }
@@ -225,7 +225,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm
           "fo"
           "main :- [.,.,.]."
-          $ AST $ n_seq_err { pos : 2, entry : 2 }
+          $ n_seq_err { pos : 2, entry : 2 }
             [ l_char_any { at : 0 }
             , l_char_any { at : 1 }
             , l_char_any_err EOI { pos : 2 }
@@ -236,7 +236,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
           f :- 'f'.
           o :- 'o'.
           """
-          $ AST $ n_seq { start : 0, end : 3 }
+          $ n_seq { start : 0, end : 3 }
             [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
             , n_ref "o" { start : 1, end : 2 } $ l_char (Expected 'o') { at : 1 }
             , n_ref "o" { start : 2, end : 3 } $ l_char (Expected 'o') { at : 2 }
@@ -247,7 +247,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
           f :- 'f'.
           o :- 'o'.
           """
-          $ AST $ n_seq_err { pos : 2, entry : 2 }
+          $ n_seq_err { pos : 2, entry : 2 }
             [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
             , n_ref "o" { start : 1, end : 2 } $ l_char (Expected 'o') { at : 1 }
             , n_ref_err "f" { pos : 2 } $ l_char_err (Expected 'f') (Found 'o') { pos : 2 }
@@ -259,7 +259,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
           o :- 'o'.
           nothing :- "".
           """
-          $ AST $ n_seq { start : 0, end : 3 }
+          $ n_seq { start : 0, end : 3 }
             [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
             , n_ref "nothing" { start : 1, end : 1 } $ l_text (Expected "") { start : 1, end : 1 }
             , n_ref "o" { start : 1, end : 2 } $ l_char (Expected 'o') { at : 1 }
@@ -273,7 +273,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
           o :- 'o'.
           nothing :- "".
           """
-          $ AST $ n_seq_err { pos : 1, entry : 2 }
+          $ n_seq_err { pos : 1, entry : 2 }
             [ n_ref "f" { start : 0, end : 1 } $ l_char (Expected 'f') { at : 0 }
             , n_ref "nothing" { start : 1, end : 1 } $ l_text (Expected "") { start : 1, end : 1 }
             , n_ref_err "o" { pos : 1 } $ l_char_err (Expected 'o') (Found 'x') { pos : 1 }
@@ -282,7 +282,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm
           "o"
           "main :- ('f'|'o'|'o')."
-          $ AST $ n_choice { start : 0, end : 1 }
+          $ n_choice { start : 0, end : 1 }
             [ l_char_err (Expected 'f') (Found 'o') { pos : 0 }
             , l_char (Expected 'o') { at : 0 }
             ]
@@ -290,7 +290,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm
           "x"
           "main :- ('f'|'o'|'o')."
-          $ AST $ n_choice_err { pos : 0 }
+          $ n_choice_err { pos : 0 }
             [ l_char_err (Expected 'f') (Found 'x') { pos : 0 }
             , l_char_err (Expected 'o') (Found 'x') { pos : 0 }
             , l_char_err (Expected 'o') (Found 'x') { pos : 0 }
@@ -300,7 +300,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
             """main :- repSep(fo,',').
             fo :- ('f'|'o').
             """
-            $ AST $ n_rep_sep { start : 0, end : 5 }
+            $ n_rep_sep { start : 0, end : 5 }
               [ n_ref "fo" { start : 0, end : 1 }
                   $ n_choice { start : 0, end : 1 }
                       [ l_char (Expected 'f') { at : 0 } ]
@@ -323,8 +323,8 @@ main = launchAff_ $ runSpec [consoleReporter] do
             """main :- repSep(fo,',').
             fo :- ('f'|'o').
             """
-            -- $ AST $ n_rep_sep_err { pos : 4, entry : 3 } -- TODO: or should it fail?
-            $ AST $ n_rep_sep { start : 0, end : 4 }
+            -- $ n_rep_sep_err { pos : 4, entry : 3 } -- TODO: or should it fail?
+            $ n_rep_sep { start : 0, end : 4 }
               [ n_ref "fo" { start : 0, end : 1 }
                   $ n_choice { start : 0, end : 1 }
                       [ l_char (Expected 'f') { at : 0 } ]
@@ -346,7 +346,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
           """main :- repSep(fo,"").
           fo :- ('f'|'o').
           """
-          $ AST $ n_rep_sep { start : 0, end : 3 }
+          $ n_rep_sep { start : 0, end : 3 }
               [ n_ref "fo" { start : 0, end : 1 } $ n_choice { start : 0, end : 1 } [ l_char (Expected 'f') { at : 0 } ]
               , l_text (Expected "") { start : 1, end : 1 }
               , n_ref "fo" { start : 1, end : 2 } $ n_choice { start : 1, end : 2 } [ l_char_err (Expected 'f') (Found 'o') { pos : 1 }, l_char (Expected 'f') { at : 1 } ]
@@ -358,7 +358,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
         withgrm "aaa"
           """main :- repSep('a',"").
           """
-          $ AST $ n_rep_sep { start : 0, end : 3 }
+          $ n_rep_sep { start : 0, end : 3 }
               [ l_char (Expected 'a') { at : 0 }
               , l_text (Expected "") { start : 1, end : 1 }
               , l_char (Expected 'a') { at : 1 }
@@ -369,52 +369,52 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing rep/sep when input is empty (should pass)" $
         withgrm ""
           """main :- repSep(" ","\n")."""
-          -- $ AST $ n_rep_sep_err { pos : 0, entry : 0 } -- TODO: or should it fail?
-          $ AST $ n_rep_sep { start : 0, end : 0 }
+          -- $ n_rep_sep_err { pos : 0, entry : 0 } -- TODO: or should it fail?
+          $ n_rep_sep { start : 0, end : 0 }
             [ l_text_err (Expected " ") EOI { pos : 0 }
             ]
       it "parsing rep/sep when input starts with a separator (should pass)" $
         withgrm "\n"
           """main :- repSep(" ","\n")."""
-          -- $ AST $ n_rep_sep_err { pos : 0, entry : 0 } -- TODO: or should it fail?
-          $ AST $ n_rep_sep { start : 0, end : 0 }
+          -- $ n_rep_sep_err { pos : 0, entry : 0 } -- TODO: or should it fail?
+          $ n_rep_sep { start : 0, end : 0 }
             [ l_text_err (Expected " ") (Found "\n") { pos : 0 }
             ]
       it "parsing rep/sep when input is empty, but also rep & sep are both empty as well  (should pass)" $
         withgrm ""
           """main :- repSep("","")."""
-          $ AST $ n_rep_sep { start : 0, end : 0 }
+          $ n_rep_sep { start : 0, end : 0 }
             [ l_text_eoi_err { pos : 0 }
             ]
       it "parsing rep/sep when input is empty, but both rep & sep are non-empty (should pass)" $
         withgrm ""
           """main :- repSep("a","b")."""
-          $ AST $ n_rep_sep { start : 0, end : 0 }
+          $ n_rep_sep { start : 0, end : 0 }
             [ l_text_err (Expected "a") EOI { pos : 0 }
             ]
       it "parsing rep/sep when input is empty, sep is empty, but rep is non-enpty (should pass)" $
         withgrm ""
           """main :- repSep("a","")."""
-          $ AST $ n_rep_sep { start : 0, end : 0 }
+          $ n_rep_sep { start : 0, end : 0 }
             [ l_text_err (Expected "a") EOI { pos : 0 }
             ]
       it "parsing rep/sep when input is empty, sep is empty, ane rep is char rule (should pass)" $
         withgrm ""
           """main :- repSep('a',"")."""
-          $ AST $ n_rep_sep { start : 0, end : 0 }
+          $ n_rep_sep { start : 0, end : 0 }
             [ l_char_err (Expected 'a') EOI { pos : 0 }
             ]
       it "parsing rep/sep with single rep element (should pass)" $
         withgrm "2"
           """main :- repSep("2","")."""
-          $ AST $ n_rep_sep { start : 0, end : 1 }
+          $ n_rep_sep { start : 0, end : 1 }
             [ l_text (Expected "2") { start : 0, end : 1 }
             , l_text_eoi_err { pos : 1 }
             ]
       it "parsing rep/sep with single element as char sequence (should pass)" $
         withgrm "2"
           """main :- repSep([0-9],"")."""
-          $ AST $ n_rep_sep { start : 0, end : 1 }
+          $ n_rep_sep { start : 0, end : 1 }
             [ l_char_rng { from : '0', to : '9' } { at : 0 }
             , l_text_eoi_err { pos : 1 }
             ]
@@ -423,7 +423,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
           """main :- ['[',from:char,'-',to:char,']'].
           char :- ('a'|'z').
           """
-          $ AST $ n_seq { start : 0, end : 5 }
+          $ n_seq { start : 0, end : 5 }
             [ l_char (Expected '[') { at : 0 }
             , n_ref_capt { name : "char", as : "from" } { start : 1, end : 2 }
                 $ n_choice { start : 1, end : 2 }
@@ -440,8 +440,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "plain text grammar works" $
         withgrm "foobar"
           """main :- repSep(., "")."""
-          $ AST $
-            n_rep_sep { start : 0, end : 6 }
+          $ n_rep_sep { start : 0, end : 6 }
               [ l_char_any { at : 0 }
               , l_text (Expected "") { start : 1, end : 1 }
               , l_char_any { at : 1 }
@@ -458,15 +457,15 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing newlines (as chars)" $
         withgrm "\n"
           """main :- '\n'."""
-          $ AST $ l_char (Expected '\n') { at : 0 }
+          $ l_char (Expected '\n') { at : 0 }
       it "parsing newlines (as strings)" $
         withgrm "\n"
           """main :- "\n"."""
-          $ AST $ l_text (Expected "\n") { start : 0, end : 1 }
+          $ l_text (Expected "\n") { start : 0, end : 1 }
       it "parsing char ranges" $
         withgrm "234"
           "main :- [digit,digit,digit].\ndigit :- [0-9]."
-          $ AST $ n_seq { start : 0, end : 3 }
+          $ n_seq { start : 0, end : 3 }
             [ n_ref "digit" { start : 0, end : 1 } $ l_char_rng { from : '0', to : '9' } { at : 0 }
             , n_ref "digit" { start : 1, end : 2 } $ l_char_rng { from : '0', to : '9' } { at : 1 }
             , n_ref "digit" { start : 2, end : 3 } $ l_char_rng { from : '0', to : '9' } { at : 2 }
@@ -474,15 +473,15 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "num is not parsed as alpha" $
         withgrm "2"
           "main :- [a-z]."
-          $ AST $ l_char_rng_err { from : 'a', to : 'z' } (Found '2') { pos : 0 }
+          $ l_char_rng_err { from : 'a', to : 'z' } (Found '2') { pos : 0 }
       it "parsing char ranges in sequences" $
         withgrm "2"
           "main :- [[0-9]]."
-          $ AST $ n_seq { start : 0, end : 1 } [ l_char_rng { from : '0', to : '9' } { at : 0 } ]
+          $ n_seq { start : 0, end : 1 } [ l_char_rng { from : '0', to : '9' } { at : 0 } ]
       it "parsing char ranges in sequences 2" $
         withgrm "2"
           """main :- [[0-9],repSep(" ","")]."""
-          $ AST $ n_seq { start : 0, end : 1 }
+          $ n_seq { start : 0, end : 1 }
               [ l_char_rng { from : '0', to : '9' } { at : 0 }
               , n_rep_sep { start : 1, end : 1 }
                   [ l_text_err (Expected " ") EOI { pos : 1 }
@@ -491,7 +490,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing empty rep/seps with char-ranges" $
         withgrm "2"
           """main :- [[0-9],repSep([0-9],"")]."""
-          $ AST $ n_seq { start : 0, end : 1 }
+          $ n_seq { start : 0, end : 1 }
               [ l_char_rng { from : '0', to : '9' } { at : 0 }
               , n_rep_sep { start : 1, end : 1 }
                   [ l_char_rng_err { from : '0', to : '9' } EOI { pos : 1 }
@@ -500,7 +499,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing empty rep/seps between matches" $
         withgrm "2a"
           """main :- [[0-9],repSep(" ",""),'a']."""
-          $ AST $ n_seq { start : 0, end : 2 }
+          $ n_seq { start : 0, end : 2 }
               [ l_char_rng { from : '0', to : '9' } { at : 0 }
               , n_rep_sep { start : 1, end : 1 }
                   [ l_text_err (Expected " ") (Found "a") { pos : 1 }
@@ -510,7 +509,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing empty rep/seps between matches 2" $
         withgrm "t = 25"
           """main :- [[a-z], repSep([a-z], ""), " = 25"]."""
-          $ AST $ n_seq { start : 0, end : 6 }
+          $ n_seq { start : 0, end : 6 }
               [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
               , n_rep_sep { start : 1, end : 1 }
                   [ l_char_rng_err { from : 'a', to : 'z' } (Found ' ') { pos : 1 }
@@ -520,33 +519,33 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing generic choices" $
         withgrm "x"
           "main :- ('y' | 'x')."
-          $ AST $ n_choice { start : 0, end : 1 }
+          $ n_choice { start : 0, end : 1 }
               [ l_char_err (Expected 'y') (Found 'x') { pos : 0 }
               , l_char (Expected 'x') { at : 0 }
               ]
       it "parsing choices with the first empty option (the first empty option should pass)" $ -- even though the second one seems to fit
         withgrm "x"
           "main :- (\"\" | 'x')."
-          $ AST $ n_choice { start : 0, end : 0 }
+          $ n_choice { start : 0, end : 0 }
             [ l_text (Expected "") { start : 0, end : 0 }
             ]
       it "parsing choices with the last empty option (the first fitting option should pass)" $
         withgrm "x"
           "main :- ('x' | \"\")."
-          $ AST $ n_choice { start : 0, end : 1 }
+          $ n_choice { start : 0, end : 1 }
             [ l_char (Expected 'x') { at : 0 }
             ]
       it "parsing choices with  the last empty option continued" $
         withgrm "x"
           "main :- ('y' | 'x' | \"\")."
-          $ AST $ n_choice { start : 0, end : 1 }
+          $ n_choice { start : 0, end : 1 }
             [ l_char_err (Expected 'y') (Found 'x') { pos : 0 }
             , l_char (Expected 'x') { at : 0 }
             ]
       it "parsing choices with overlapping sequences" $
         withgrm "x"
           "main :- (['x', '='] | 'x')."
-          $ AST $ n_choice { start : 0, end : 1 }
+          $ n_choice { start : 0, end : 1 }
             [ n_seq_err { entry : 1, pos : 1 }
               [ l_char (Expected 'x') { at : 0 }
               , l_char_err (Expected '=') EOI { pos : 1 }
@@ -556,14 +555,14 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing choices with empty option on empty input" $
         withgrm ""
           "main :- ('x' | \"\")."
-          $ AST $ n_choice { start : 0, end : 0 }
+          $ n_choice { start : 0, end : 0 }
             [ l_char_err (Expected 'x') EOI { pos : 0 }
             , l_text (Expected "") { start : 0, end : 0 }
             ]
       it "parsing choices with empty option on a meaningful input" $
         withgrm "x"
           "main :- ([a-z] | \"\")."
-          $ AST $ n_choice { start : 0, end : 1 }
+          $ n_choice { start : 0, end : 1 }
             [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
             ]
 
@@ -579,98 +578,95 @@ main = launchAff_ $ runSpec [consoleReporter] do
       it "parsing identifier rule" $
         withgrm "t"
           identifierGrammar
-          $ AST
-              $ n_ref "ident" { start : 0, end : 1 }
-              $ n_seq { start : 0, end : 1 }
-                  [ n_ref "alpha" { start : 0, end : 1 }
-                      $ n_choice { start : 0, end : 1 }
-                      [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
-                      ]
-                  , n_rep_sep { start : 1, end : 1 }
-                      [ n_choice_err { pos : 1 }
-                          [ n_ref_err "alphaNum" { pos : 1 }
-                              $ n_choice_err { pos : 1 }
-                                  [ n_ref_err "alpha" { pos : 1 }
-                                      $ n_choice_err { pos : 1 }
-                                      [ l_char_rng_err
-                                          { from : 'a', to : 'z' } EOI { pos : 1 }
-                                      , l_char_rng_err
-                                          { from : 'A', to : 'Z' } EOI { pos : 1 }
-                                      , l_text_err
-                                          (Expected "_") EOI { pos : 1 }
-                                      ]
-                                  , n_ref_err "num" { pos : 1 }
-                                      $ l_char_rng_err
-                                          { from : '0', to : '9' } EOI { pos : 1 }
-                                  ]
-                          , l_text_err (Expected ".") EOI { pos : 1 }
-                          ]
-                      ]
-                  ]
+            $ n_ref "ident" { start : 0, end : 1 }
+            $ n_seq { start : 0, end : 1 }
+                [ n_ref "alpha" { start : 0, end : 1 }
+                    $ n_choice { start : 0, end : 1 }
+                    [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
+                    ]
+                , n_rep_sep { start : 1, end : 1 }
+                    [ n_choice_err { pos : 1 }
+                        [ n_ref_err "alphaNum" { pos : 1 }
+                            $ n_choice_err { pos : 1 }
+                                [ n_ref_err "alpha" { pos : 1 }
+                                    $ n_choice_err { pos : 1 }
+                                    [ l_char_rng_err
+                                        { from : 'a', to : 'z' } EOI { pos : 1 }
+                                    , l_char_rng_err
+                                        { from : 'A', to : 'Z' } EOI { pos : 1 }
+                                    , l_text_err
+                                        (Expected "_") EOI { pos : 1 }
+                                    ]
+                                , n_ref_err "num" { pos : 1 }
+                                    $ l_char_rng_err
+                                        { from : '0', to : '9' } EOI { pos : 1 }
+                                ]
+                        , l_text_err (Expected ".") EOI { pos : 1 }
+                        ]
+                    ]
+                ]
       it "parsing identifier rule 2" $
         withgrm "2"
           identifierGrammar
-          $ AST
-              $ n_ref_err "ident" { pos : 0 }
-              $ n_seq_err { pos : 0, entry : 0 }
-                  [ n_ref_err "alpha" { pos : 0 }
-                      $ n_choice_err { pos : 0 }
-                      [ l_char_rng_err { from : 'a', to : 'z' } (Found '2') { pos : 0 }
-                      , l_char_rng_err
-                          { from : 'A', to : 'Z' } (Found '2') { pos : 0 }
-                      , l_text_err
-                          (Expected "_") (Found "2") { pos : 0 }
-                      ]
-                  ]
+            $ n_ref_err "ident" { pos : 0 }
+            $ n_seq_err { pos : 0, entry : 0 }
+                [ n_ref_err "alpha" { pos : 0 }
+                    $ n_choice_err { pos : 0 }
+                    [ l_char_rng_err { from : 'a', to : 'z' } (Found '2') { pos : 0 }
+                    , l_char_rng_err
+                        { from : 'A', to : 'Z' } (Found '2') { pos : 0 }
+                    , l_text_err
+                        (Expected "_") (Found "2") { pos : 0 }
+                    ]
+                ]
 
       it "parsing identifier rule 3" $
         withgrm "t0 "
           identifierGrammar
-          $ AST
-              $ n_ref "ident" { start : 0, end : 2 }
-              $ n_seq { start : 0, end : 2 }
-                  [ n_ref "alpha" { start : 0, end : 1 }
-                      $ n_choice { start : 0, end : 1 }
-                      [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
-                      ]
-                  , n_rep_sep { start : 1, end : 2 }
-                      [ n_choice { start : 1, end : 2 }
-                          [ n_ref "alphaNum" { start : 1, end : 2 }
-                              $ n_choice { start : 1, end : 2 }
-                                  [ n_ref_err "alpha" { pos : 1 }
-                                      $ n_choice_err { pos : 1 }
-                                      [ l_char_rng_err
-                                          { from : 'a', to : 'z' } (Found '0') { pos : 1 }
-                                      , l_char_rng_err
-                                          { from : 'A', to : 'Z' } (Found '0') { pos : 1 }
-                                      , l_text_err
-                                          (Expected "_") (Found "0") { pos : 1 }
-                                      ]
-                                  , n_ref "num" { start : 1, end : 2 }
-                                      $ l_char_rng
-                                          { from : '0', to : '9' } { at : 1 }
-                                  ]
-                          ]
-                      , l_text (Expected "") { start : 2, end : 2 }
-                      , n_choice_err { pos : 2 }
-                          [ n_ref_err "alphaNum" { pos : 2 }
-                              $ n_choice_err { pos : 2 }
-                                  [ n_ref_err "alpha" { pos : 2 }
-                                      $ n_choice_err { pos : 2 }
-                                      [ l_char_rng_err
-                                          { from : 'a', to : 'z' } (Found ' ') { pos : 2 }
-                                      , l_char_rng_err
-                                          { from : 'A', to : 'Z' } (Found ' ') { pos : 2 }
-                                      , l_text_err
-                                          (Expected "_") (Found " ") { pos : 2 }
-                                      ]
-                                  , n_ref_err "num" { pos : 2 }
-                                      $ l_char_rng_err
-                                          { from : '0', to : '9' } (Found ' ') { pos : 2 }
-                                  ]
-                          , l_text_err (Expected ".") (Found " ") { pos : 2 }
-                          ]
-                      ]
+            $ n_ref "ident" { start : 0, end : 2 }
+            $ n_seq { start : 0, end : 2 }
+                [ n_ref "alpha" { start : 0, end : 1 }
+                    $ n_choice { start : 0, end : 1 }
+                    [ l_char_rng { from : 'a', to : 'z' } { at : 0 }
+                    ]
+                , n_rep_sep { start : 1, end : 2 }
+                    [ n_choice { start : 1, end : 2 }
+                        [ n_ref "alphaNum" { start : 1, end : 2 }
+                            $ n_choice { start : 1, end : 2 }
+                                [ n_ref_err "alpha" { pos : 1 }
+                                    $ n_choice_err { pos : 1 }
+                                    [ l_char_rng_err
+                                        { from : 'a', to : 'z' } (Found '0') { pos : 1 }
+                                    , l_char_rng_err
+                                        { from : 'A', to : 'Z' } (Found '0') { pos : 1 }
+                                    , l_text_err
+                                        (Expected "_") (Found "0") { pos : 1 }
+                                    ]
+                                , n_ref "num" { start : 1, end : 2 }
+                                    $ l_char_rng
+                                        { from : '0', to : '9' } { at : 1 }
+                                ]
+                        ]
+                    , l_text (Expected "") { start : 2, end : 2 }
+                    , n_choice_err { pos : 2 }
+                        [ n_ref_err "alphaNum" { pos : 2 }
+                            $ n_choice_err { pos : 2 }
+                                [ n_ref_err "alpha" { pos : 2 }
+                                    $ n_choice_err { pos : 2 }
+                                    [ l_char_rng_err
+                                        { from : 'a', to : 'z' } (Found ' ') { pos : 2 }
+                                    , l_char_rng_err
+                                        { from : 'A', to : 'Z' } (Found ' ') { pos : 2 }
+                                    , l_text_err
+                                        (Expected "_") (Found " ") { pos : 2 }
+                                    ]
+                                , n_ref_err "num" { pos : 2 }
+                                    $ l_char_rng_err
+                                        { from : '0', to : '9' } (Found ' ') { pos : 2 }
+                                ]
+                        , l_text_err (Expected ".") (Found " ") { pos : 2 }
+                        ]
+                    ]
                   ]
 
 
@@ -920,12 +916,12 @@ mkParseError :: String -> Int -> Int -> Int -> P.ParseError
 mkParseError err line column index = P.ParseError err $ P.Position { line, column, index }
 
 
-parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type) a. Show a => MonadThrow Ex.Error m ⇒ String → String -> AST a → m Unit
+parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type) a. Show a => MonadThrow Ex.Error m ⇒ String → String -> ASTNode a → m Unit
 parsesWithGivenGrammarAs str grammarStr expectation =
   let
     eGrammar = useGrammar grammarStr
     buildAst grammar = WithGrammar.parse grammar (const 0) str
-  in (show <$> buildAst <$> lmap convertError eGrammar) `shouldEqual` (Right $ show expectation)
+  in (show <$> buildAst <$> lmap convertError eGrammar) `shouldEqual` (Right $ show $ AST { source : str, tree : expectation })
 
 
 convertsGrammarToTree :: ∀ (m ∷ Type -> Type). MonadThrow Ex.Error m ⇒ String -> String → m Unit
@@ -953,7 +949,7 @@ parsesGivenGrammarWithGrammar :: ∀ (m ∷ Type -> Type). MonadEffect m => Mona
 parsesGivenGrammarWithGrammar grammarToParse expectationStr = do
     let
       buildAst :: AST String
-      buildAst = fillChunks grammarToParse $ WithGrammar.parse Self.grammar (const unit) grammarToParse
+      buildAst = fillChunks $ WithGrammar.parse Self.grammar (const unit) grammarToParse
     -- liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
     (show $ Self.extract buildAst) `shouldEqual` expectationStr
 
@@ -964,7 +960,7 @@ parsesGrammarWithGrammar fileName = do
     expectationStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar.expected"
     let
       buildAst :: AST String
-      buildAst = fillChunks grammarToParseStr $ WithGrammar.parse Self.grammar (const unit) grammarToParseStr
+      buildAst = fillChunks $ WithGrammar.parse Self.grammar (const unit) grammarToParseStr
       grammar :: Grammar
       grammar = Self.extract buildAst
     liftEffect $ writeTextFile Encoding.UTF8 ("./test/grammars/" <> fileName <> ".grammar.result2") $ show grammar
