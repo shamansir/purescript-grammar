@@ -32,8 +32,25 @@ type P a = Parser a Unit
 type PX a x = Parser a x
 
 
-parse :: forall a. Grammar -> (Rule -> a) -> String -> AST a
-parse grammar f = runParser $ parseRule (G.set grammar) f $ G.main grammar
+{- TODO
+type Context = Unit
+
+
+type Processors =
+    { init :: Context
+    , pre :: Rule a -> Context -> Rule a
+    , post :: Rule a -> Context -> ASTNode a -> Rule a
+    , resolve :: Rule a -> ASTNode a -> Context -> Point a -> Point a
+    }
+-}
+
+
+parse :: Grammar -> String -> AST Unit
+parse = parseBy $ const unit
+
+
+parseBy :: forall a. (Rule -> a) -> Grammar -> String -> AST a
+parseBy f grammar = runParser $ parseRule (G.set grammar) f $ G.main grammar
 
 
 runParser :: forall a. P a -> String -> AST a

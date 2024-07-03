@@ -18,15 +18,18 @@ import Yoga.Tree.Extended (break, leaf, value, children) as Tree
 import Grammar (Rule(..), WhichChar(..), RuleName, CharX, CaptureName)
 import Grammar (expands, toRepr) as G
 
-import Grammar.AST.Chunk (Chunk, Range, Position, PosFinder)
-import Grammar.AST.Chunk (for, posFinderFor) as Chunk
+import Grammar.AST.Chunk (Chunk)
+import Grammar.AST.Chunk (from) as Chunk
+import Grammar.AST.LocatedChunk (LocatedChunk)
+import Grammar.AST.Location (Range, Position, PosFinder) as Loc
+import Grammar.AST.LocatedChunk (for, posFinderFor) as LocChunk
 import Grammar.AST.Point (Point)
 import Grammar.AST.Point (Point(..)) as P
 
 
 data Attempt a -- TODO: Attempt f a, f is for failure value
-    = Match Range a
-    | Fail Position Error
+    = Match Loc.Range a
+    | Fail Loc.Position Error
 
 
 derive instance Functor Attempt
@@ -298,12 +301,22 @@ _isMatch node = case _.result $ Tree.value node of
 _fillChunks :: forall a. String -> ASTNode a -> ASTNode Chunk
 _fillChunks from = map \x -> x { result = injectMatch x.result }
     where
-        posFinder :: PosFinder
-        posFinder = Chunk.posFinderFor from
         injectMatch :: Attempt a -> Attempt Chunk
         injectMatch = case _ of
             Match rng _ ->
-                Match rng $ Chunk.for from posFinder rng
+                Match rng $ Chunk.from from rng
+            Fail pos error -> Fail pos error
+
+
+_fillLocChunks :: forall a. String -> ASTNode a -> ASTNode LocatedChunk
+_fillLocChunks from = map \x -> x { result = injectMatch x.result }
+    where
+        posFinder :: Loc.PosFinder
+        posFinder = LocChunk.posFinderFor from
+        injectMatch :: Attempt a -> Attempt LocatedChunk
+        injectMatch = case _ of
+            Match rng _ ->
+                Match rng $ LocChunk.for from posFinder rng
             Fail pos error -> Fail pos error
 
 

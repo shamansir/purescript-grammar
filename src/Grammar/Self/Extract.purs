@@ -26,12 +26,12 @@ extract =
     --     _ = Debug.spy "ast" $ show ast
     --     _ = Debug.spy "convert" $ show $ convert $ AST.root ast
     -- in ast # AST.root # convert # flip bind load # fromMaybe Grammar.empty
-    AST.root >>> AST.toPoint >>> flip bind P.points >>> flip bind load >>> fromMaybe Grammar.empty
+    AST.root >>> AST.toPoint >>> (=<<) P.points >>> (=<<) load >>> fromMaybe Grammar.empty
 
 
 load :: Array (Point String) -> Maybe Grammar
 load ruleDefnPoints =
-    loadGrammar $ Array.catMaybes $ flip bind extractRuleDef <$> P.ifChosen 0 <$> ruleDefnPoints
+    loadGrammar $ Array.catMaybes $ (=<<) extractRuleDef <$> P.ifChosen 0 <$> ruleDefnPoints
 
     where
 
@@ -67,7 +67,12 @@ load ruleDefnPoints =
         ref :: Point String -> Maybe G.Rule
         ref oopoint = do
             refPoint <- P.ifRule "ref" oopoint
-            let mbCaptureName = P.take 0 refPoint >>= P.ifChosen 0 >>= P.take 0 <#> P.collectText
+            let
+                mbCaptureName =
+                    P.take 0 refPoint
+                        >>= P.ifChosen 0
+                        >>= P.take 0
+                        <#> P.collectText
             ruleName <- P.take 1 refPoint <#> P.collectText
             pure $ G.Ref mbCaptureName ruleName
 

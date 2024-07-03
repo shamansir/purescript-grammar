@@ -30,9 +30,10 @@ import Grammar.Parser (parser) as Grammar
 import Grammar.Self.Parser (grammar) as Self
 import Grammar.Self.Extract (extract) as Self
 import Grammar.AST (AST(..), ASTNode, Attempt(..), Expected(..), Found(..), Error(..), ruleOf, fillChunks)
-import Grammar.AST.Chunk (Range)
-import Grammar.AST.Chunk (content, posFinderFor) as Chunk
-import Grammar.AST.Parser (parse) as WithGrammar
+import Grammar.AST.Location (Range)
+import Grammar.AST.Chunk (content) as Chunk
+import Grammar.AST.LocatedChunk (posFinderFor) as LocChunk
+import Grammar.AST.Parser (parse, parseBy) as WithGrammar
 
 import Parsing (runParser, ParseError(..), Position(..)) as P
 import StringParser (ParseError) as SP
@@ -777,7 +778,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
 
     describe "chunks" $ do
       it "finding chunks" $ do
-        let finder = Chunk.posFinderFor "aaa\nbbbb\ncc"
+        let finder = LocChunk.posFinderFor "aaa\nbbbb\ncc"
         {-
               C0     C1     C2     C3     C4
         L0 : 00 a | 01 a | 02 a | 03 \n
@@ -942,7 +943,7 @@ parsesWithGivenGrammarAs :: ∀ (m ∷ Type -> Type) a. Show a => MonadThrow Ex.
 parsesWithGivenGrammarAs str grammarStr expectation =
   let
     eGrammar = useGrammar grammarStr
-    buildAst grammar = WithGrammar.parse grammar (const 0) str
+    buildAst grammar = WithGrammar.parseBy (const 0) grammar str
   in (show <$> buildAst <$> lmap convertError eGrammar) `shouldEqual` (Right $ show $ AST { source : str, tree : expectation })
 
 
@@ -961,7 +962,7 @@ parsesWithGrammarFromFile fileName = do
     let
       eGrammar = useGrammar grammarStr
       buildAst :: Grammar -> AST Int
-      buildAst grammar = WithGrammar.parse grammar (const 0) sourceStr
+      buildAst grammar = WithGrammar.parseBy (const 0) grammar sourceStr
       eAST = buildAst <$> lmap convertError eGrammar
     liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
     (show <$> eAST) `shouldEqual` (Right expectationStr)
@@ -971,7 +972,7 @@ parsesGivenGrammarWithGrammar :: ∀ (m ∷ Type -> Type). MonadEffect m => Mona
 parsesGivenGrammarWithGrammar grammarToParse expectationStr = do
     let
       buildAst :: AST String
-      buildAst = map Chunk.content $ fillChunks $ WithGrammar.parse Self.grammar (const unit) grammarToParse
+      buildAst = map Chunk.content $ fillChunks $ WithGrammar.parse Self.grammar grammarToParse
     -- liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
     (show $ Self.extract buildAst) `shouldEqual` expectationStr
 
@@ -982,7 +983,7 @@ parsesGrammarWithGrammar fileName = do
     expectationStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar.expected"
     let
       buildAst :: AST String
-      buildAst = map Chunk.content $ fillChunks $ WithGrammar.parse Self.grammar (const unit) grammarToParseStr
+      buildAst = map Chunk.content $ fillChunks $ WithGrammar.parse Self.grammar grammarToParseStr
       grammar :: Grammar
       grammar = Self.extract buildAst
     liftEffect $ writeTextFile Encoding.UTF8 ("./test/grammars/" <> fileName <> ".grammar.result2") $ show grammar

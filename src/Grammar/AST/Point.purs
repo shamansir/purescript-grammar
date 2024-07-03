@@ -49,11 +49,11 @@ infixr 7 pointChosenFlipped as <#
 -- infixr 8 _nodeAt as @~
 
 
-ifChosenFlipped    = flip ifChosen
-ifRuleFlipped      = flip ifRule
-valueIfRuleFlipped = flip valueIfRule
-takeFlipped        = flip take
-pointChosenFlipped = flip pointChosen
+ifChosenFlipped    = flip ifChosen    :: forall a. Point a -> Int -> Maybe (Point a)
+ifRuleFlipped      = flip ifRule      :: forall a. Point a -> String -> Maybe (Point a)
+valueIfRuleFlipped = flip valueIfRule :: forall a. Point a -> String -> Maybe a
+takeFlipped        = flip take        :: forall a. Point a -> Int -> Maybe (Point a)
+pointChosenFlipped = flip pointChosen :: forall a b. Point a -> (Int -> Point a -> Maybe b) -> Maybe b
 
 
 -- type InPoint a = Maybe (Point a)
