@@ -4,10 +4,11 @@ import Prelude
 
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.String (joinWith) as String
+import Data.String (Pattern(..))
+import Data.String (joinWith, split, length) as String
 import Data.String.CodeUnits (singleton, slice) as String
 import Data.Newtype (class Newtype, unwrap, wrap)
-import Data.Array (catMaybes, find, index) as Array
+import Data.Array (catMaybes, find, index, foldl) as Array
 import Data.Tuple (snd) as Tuple
 import Data.Tuple.Nested ((/\), type (/\))
 
@@ -17,14 +18,10 @@ import Yoga.Tree.Extended (break, leaf, value, children) as Tree
 import Grammar (Rule(..), WhichChar(..), RuleName, CharX, CaptureName)
 import Grammar (expands, toRepr) as G
 
+import Grammar.AST.Chunk (Chunk, Range, Position, PosFinder)
+import Grammar.AST.Chunk (for, posFinderFor) as Chunk
 import Grammar.AST.Point (Point)
 import Grammar.AST.Point (Point(..)) as P
-
-
-type Range = { start :: Int, end :: Int }
-
-
-type Position = Int
 
 
 data Attempt a -- TODO: Attempt f a, f is for failure value
@@ -238,7 +235,7 @@ ruleOf :: forall a. ASTNode a -> Rule
 ruleOf = Tree.value >>> _.rule
 
 
-fillChunks :: forall a. AST a -> AST String
+fillChunks :: forall a. AST a -> AST Chunk
 fillChunks = _over _fillChunks
 
 
@@ -292,21 +289,21 @@ toPoint node =
         Fail _ _ -> Nothing
 
 
-
-
-
 _isMatch :: forall a. ASTNode a -> Boolean
 _isMatch node = case _.result $ Tree.value node of
     Match _ _ -> true
     Fail _ _ -> false
 
 
-_fillChunks :: forall a. String -> ASTNode a -> ASTNode String
+_fillChunks :: forall a. String -> ASTNode a -> ASTNode Chunk
 _fillChunks from = map \x -> x { result = injectMatch x.result }
     where
-        injectMatch :: Attempt a -> Attempt String
+        posFinder :: PosFinder
+        posFinder = Chunk.posFinderFor from
+        injectMatch :: Attempt a -> Attempt Chunk
         injectMatch = case _ of
-            Match rng _ -> Match rng $ String.slice rng.start rng.end from
+            Match rng _ ->
+                Match rng $ Chunk.for from posFinder rng
             Fail pos error -> Fail pos error
 
 

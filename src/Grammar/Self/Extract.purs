@@ -30,8 +30,8 @@ extract =
 
 
 load :: Array (Point String) -> Maybe Grammar
-load ruleDefnMatches =
-    loadGrammar $ Array.catMaybes $ flip bind extractRuleDef <$> P.ifChosen 0 <$> ruleDefnMatches
+load ruleDefnPoints =
+    loadGrammar $ Array.catMaybes $ flip bind extractRuleDef <$> P.ifChosen 0 <$> ruleDefnPoints
 
     where
 
@@ -42,86 +42,86 @@ load ruleDefnMatches =
                 Map.lookup "main" allRules <#> \mainRule -> Grammar mainRule $ Map.delete "main" allRules
 
         extractRuleDef :: Point String -> Maybe { ruleName :: G.RuleName, rule :: Grammar.Rule }
-        extractRuleDef match = do
-            ruleDefn <- P.ifRule "ruleDefn" match
+        extractRuleDef point = do
+            ruleDefn <- P.ifRule "ruleDefn" point
             ruleName <- P.take 0 ruleDefn >>= P.valueIfRule "ident"
             rule     <- P.take 4 ruleDefn >>= extractRule "rule"
             pure { ruleName, rule }
 
 
         extractRule :: String -> Point String -> Maybe Grammar.Rule
-        extractRule expectedName match =
-            P.ifRule expectedName match
-                >>= P.pointChosen \n oomatch ->
+        extractRule expectedName point =
+            P.ifRule expectedName point
+                >>= P.pointChosen \n oopoint ->
                 case n of
-                    0 -> seq oomatch
-                    1 -> choice oomatch
-                    2 -> charRule' oomatch
-                    3 -> text oomatch
-                    4 -> repSep oomatch
-                    5 -> oomatch # P.ifRule "placeholder" $> pure G.Placeholder
-                    6 -> ref oomatch
+                    0 -> seq oopoint
+                    1 -> choice oopoint
+                    2 -> charRule' oopoint
+                    3 -> text oopoint
+                    4 -> repSep oopoint
+                    5 -> oopoint # P.ifRule "placeholder" $> pure G.Placeholder
+                    6 -> ref oopoint
                     _ -> Nothing
 
 
         ref :: Point String -> Maybe G.Rule
-        ref oomatch = do
-            refMatch <- P.ifRule "ref" oomatch
-            let mbCaptureName = P.take 0 refMatch >>= P.ifChosen 0 >>= P.take 0 <#> P.collectText
-            ruleName <- P.take 1 refMatch <#> P.collectText
+        ref oopoint = do
+            refPoint <- P.ifRule "ref" oopoint
+            let mbCaptureName = P.take 0 refPoint >>= P.ifChosen 0 >>= P.take 0 <#> P.collectText
+            ruleName <- P.take 1 refPoint <#> P.collectText
             pure $ G.Ref mbCaptureName ruleName
 
 
         repSep :: Point String -> Maybe G.Rule
-        repSep oomatch = do
-            repSepMatch <- P.ifRule "repSep" oomatch
-            rep <- P.take 2 repSepMatch >>= extractRule "rep"
-            sep <- P.take 4 repSepMatch >>= extractRule "sep"
+        repSep oopoint = do
+            repSepPoint <- P.ifRule "repSep" oopoint
+            rep <- P.take 2 repSepPoint >>= extractRule "rep"
+            sep <- P.take 4 repSepPoint >>= extractRule "sep"
             pure $ G.RepSep rep sep
 
 
         seq :: Point String -> Maybe G.Rule
-        seq oomatch = do
-            seqMatch <- P.ifRule "seq" oomatch
-            ruleMatches <- P.take 2 seqMatch >>= P.points
-            pure $ G.Sequence $ Array.catMaybes $ extractRule "rule" <$> ruleMatches
+        seq oopoint = do
+            seqPoint <- P.ifRule "seq" oopoint
+            rulePoints <- P.take 2 seqPoint >>= P.points
+            pure $ G.Sequence $ Array.catMaybes $ extractRule "rule" <$> rulePoints
 
 
         choice :: Point String -> Maybe G.Rule
-        choice oomatch = do
-            chMatch <- P.ifRule "choice" oomatch
-            ruleMatches <- P.take 2 chMatch >>= P.points
-            pure $ G.Choice $ Array.catMaybes $ extractRule "rule" <$> ruleMatches
+        choice oopoint = do
+            chPoint <- P.ifRule "choice" oopoint
+            rulePoints <- P.take 2 chPoint >>= P.points
+            pure $ G.Choice $ Array.catMaybes $ extractRule "rule" <$> rulePoints
 
 
         text :: Point String -> Maybe G.Rule
-        text oomatch = do
-            tMatch <- P.ifRule "text" oomatch
-            strCharMatches <- P.take 1 tMatch >>= P.points
-            pure $ G.Text $ P.collectContent strCharMatches
+        text oopoint = do
+            tPoint <- P.ifRule "text" oopoint
+            strCharPoints <- P.take 1 tPoint >>= P.points
+            pure $ G.Text $ P.collectContent strCharPoints
 
 
         charRule' :: Point String -> Maybe G.Rule
-        charRule' oomatch =
-            P.ifRule "charRule" oomatch
-                >>= P.pointChosen \n ioomatch ->
+        charRule' oopoint =
+            P.ifRule "charRule" oopoint
+                >>= P.pointChosen \n ioopoint ->
                 case n of
                     0 -> do -- char range
-                        crMatch  <- P.ifRule "charRange" ioomatch
-                        fromChar <- P.take 1 crMatch <#> P.collectText >>= String.charAt 0
-                        toChar   <- P.take 3 crMatch <#> P.collectText >>= String.charAt 0
+                        crPoint  <- P.ifRule "charRange" ioopoint
+                        fromChar <- P.take 1 crPoint <#> P.collectText >>= String.charAt 0
+                        toChar   <- P.take 3 crPoint <#> P.collectText >>= String.charAt 0
                         pure $ G.Char $ G.Range fromChar toChar
                     1 -> do -- not char
-                        ncMatch  <- P.ifRule "notChar" ioomatch
-                        charStr <- P.take 1 ncMatch <#> P.collectText <#> P._unescape
+                        ncPoint  <- P.ifRule "notChar" ioopoint
+                        charStr <- P.take 1 ncPoint <#> P.collectText <#> P._unescape
                         charx <- charStr # String.charAt 1 <#> G.fromChar
                         pure $ G.Char $ G.Not charx
                     2 -> do -- single char
-                        scMatch  <- P.ifRule "singleChar" ioomatch
-                        charStr <- P.take 1 scMatch <#> P.collectText
+                        scPoint  <- P.ifRule "singleChar" ioopoint
+                        charStr <- P.take 1 scPoint <#> P.collectText
                         charx <- charStr # G.fromString
                         pure $ G.Char $ G.Single charx
                     3 -> do
-                        _ <- P.ifRule "anyChar" ioomatch
+                        _ <- P.ifRule "anyChar" ioopoint
                         pure $ G.Char G.Any
                     _ -> Nothing

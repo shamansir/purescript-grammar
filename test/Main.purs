@@ -12,7 +12,7 @@ import Data.Either (Either(..))
 import Data.Bifunctor (lmap)
 
 import Effect.Aff (launchAff_)
-import Test.Spec (describe, it, pending')
+import Test.Spec (describe, it, pending', itOnly)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
@@ -29,7 +29,9 @@ import Grammar (toTree) as Grammar
 import Grammar.Parser (parser) as Grammar
 import Grammar.Self.Parser (grammar) as Self
 import Grammar.Self.Extract (extract) as Self
-import Grammar.AST (AST(..), ASTNode, Range, Attempt(..), Expected(..), Found(..), Error(..), ruleOf, fillChunks)
+import Grammar.AST (AST(..), ASTNode, Attempt(..), Expected(..), Found(..), Error(..), ruleOf, fillChunks)
+import Grammar.AST.Chunk (Range)
+import Grammar.AST.Chunk (content, posFinderFor) as Chunk
 import Grammar.AST.Parser (parse) as WithGrammar
 
 import Parsing (runParser, ParseError(..), Position(..)) as P
@@ -773,6 +775,26 @@ main = launchAff_ $ runSpec [consoleReporter] do
           parsesGrammarWithGrammar "treeSql"
 
 
+    describe "chunks" $ do
+      it "finding chunks" $ do
+        let finder = Chunk.posFinderFor "aaa\nbbbb\ncc"
+        {-
+              C0     C1     C2     C3     C4
+        L0 : 00 a | 01 a | 02 a | 03 \n
+        L1 : 04 b | 05 b | 06 b | 07 b | 08 \n
+        L2 : 09 c | 10 c
+        -}
+        finder 0 `shouldEqual` { line : 0, column : 0 }
+        finder 1 `shouldEqual` { line : 0, column : 1 }
+        finder 3 `shouldEqual` { line : 0, column : 3 }
+        finder 4 `shouldEqual` { line : 1, column : 0 }
+        finder 6 `shouldEqual` { line : 1, column : 2 }
+        finder 7 `shouldEqual` { line : 1, column : 3 }
+        finder 10 `shouldEqual` { line : 2, column : 1 }
+        finder 15 `shouldEqual` { line : 3, column : 0 } -- should be the last symbol?
+        finder 20 `shouldEqual` { line : 3, column : 0 } -- should be the last symbol?
+
+
 l_char :: Expected Char -> { at :: Int } -> ASTNode Int
 l_char (Expected ch) { at } = Tree.leaf { rule : Char $ Single $ Raw ch, result : Match { start : at, end : at + 1 } 0 }
 
@@ -949,7 +971,7 @@ parsesGivenGrammarWithGrammar :: ∀ (m ∷ Type -> Type). MonadEffect m => Mona
 parsesGivenGrammarWithGrammar grammarToParse expectationStr = do
     let
       buildAst :: AST String
-      buildAst = fillChunks $ WithGrammar.parse Self.grammar (const unit) grammarToParse
+      buildAst = map Chunk.content $ fillChunks $ WithGrammar.parse Self.grammar (const unit) grammarToParse
     -- liftEffect $ writeTextFile Encoding.UTF8 ("./test/sources/" <> fileName <> ".src.result") $ reportE eAST
     (show $ Self.extract buildAst) `shouldEqual` expectationStr
 
@@ -960,7 +982,7 @@ parsesGrammarWithGrammar fileName = do
     expectationStr <- liftEffect $ readTextFile Encoding.UTF8 $ "./test/grammars/" <> fileName <> ".grammar.expected"
     let
       buildAst :: AST String
-      buildAst = fillChunks $ WithGrammar.parse Self.grammar (const unit) grammarToParseStr
+      buildAst = map Chunk.content $ fillChunks $ WithGrammar.parse Self.grammar (const unit) grammarToParseStr
       grammar :: Grammar
       grammar = Self.extract buildAst
     liftEffect $ writeTextFile Encoding.UTF8 ("./test/grammars/" <> fileName <> ".grammar.result2") $ show grammar
